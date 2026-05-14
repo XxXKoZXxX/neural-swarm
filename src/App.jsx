@@ -334,7 +334,9 @@ function Landing({onStart,onSignIn}) {
     {n:"POWER",p:"$79",per:"/month",c:T.purple,feats:["Everything in Pro","Cost analytics","Team workspace","API access"]},
   ];
   return (
-    <div style={{background:T.bg,color:T.text,fontFamily:ff,minHeight:"100vh"}}>
+    <>
+    <NeuralSwarmBg/>
+    <div style={{background:"transparent",color:T.text,fontFamily:ff,minHeight:"100vh"}}>
       <nav style={{borderBottom:`1px solid ${T.border2}`,padding:"12px 40px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:"rgba(9,11,16,.96)",zIndex:50}}>
         <div style={{color:T.cyan,fontSize:"15px",fontWeight:"bold",letterSpacing:"5px"}}>⬡ NEURAL SWARM</div>
         <div style={{display:"flex",gap:"8px"}}>
@@ -408,7 +410,215 @@ function Landing({onStart,onSignIn}) {
         </div>
       </footer>
     </div>
+    </>
   );
+}
+
+// ── NEURAL SWARM BACKGROUND ──────────────────────────────────────────────────
+function NeuralSwarmBg({ agOut = {}, phase = 'idle' }) {
+  const cvRef = useRef(null);
+  const rafRef = useRef(null);
+  const live = useRef({ agOut: {}, phase: 'idle', mx: -9999, my: -9999, clicks: [], t: 0 });
+
+  useEffect(() => { live.current.agOut = agOut; live.current.phase = phase; }, [agOut, phase]);
+
+  useEffect(() => {
+    const cv = cvRef.current;
+    if (!cv) return;
+    const ctx = cv.getContext('2d');
+    const AG_KEYS = Object.keys(AGENTS);
+
+    const hexRgb = h => [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+    const lerp = (a,b,t) => a+(b-a)*t;
+    const clamp = (v,lo,hi) => Math.max(lo,Math.min(hi,v));
+
+    const resize = () => { cv.width = window.innerWidth; cv.height = window.innerHeight; };
+    resize();
+    window.addEventListener('resize', resize);
+    const onMM = e => { live.current.mx = e.clientX; live.current.my = e.clientY; };
+    const onML = () => { live.current.mx = -9999; live.current.my = -9999; };
+    const onCk = e => { live.current.clicks.push({ x: e.clientX, y: e.clientY, t: performance.now() }); };
+    window.addEventListener('mousemove', onMM);
+    document.addEventListener('mouseleave', onML);
+    window.addEventListener('click', onCk);
+
+    const ACOLS = ['#00ffe7','#39ff14','#bf5fff','#ff6b35','#ff3cac','#ffdd00','#00b4ff','#ff6eb4','#a78bfa','#3ecf8e'];
+    const N_AMB = 52;
+
+    const mkNode = (id, isAg, agKey) => {
+      const z = isAg ? 0.65+Math.random()*.35 : 0.15+Math.random()*.85;
+      return { id, x: Math.random()*cv.width, y: Math.random()*cv.height,
+        z, vx: (Math.random()-.5)*.5*z, vy: (Math.random()-.5)*.5*z,
+        col: isAg ? AGENTS[agKey].c : ACOLS[id%ACOLS.length],
+        agKey: isAg ? agKey : null,
+        r: isAg ? 3.2+Math.random()*1.8 : 0.8+z*2.2,
+        glow: 0, pt: Math.random()*Math.PI*2 };
+    };
+
+    const nodes = [];
+    for (let i = 0; i < N_AMB; i++) nodes.push(mkNode(i, false, null));
+    AG_KEYS.forEach((k, i) => nodes.push(mkNode(N_AMB+i, true, k)));
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
+
+    const packets = [], waves = [], fires = [];
+    const prevSt = {};
+    let noiseT = 0;
+
+    const PHASE_TINT = {
+      idle:[0,0,0], orchestrating:[14,9,0], running:[0,14,14], overseeing:[9,0,18], done:[0,14,7]
+    };
+
+    function frame(now) {
+      const dt = clamp((now-(live.current.t||now-16.67))/16.67, .05, 3);
+      live.current.t = now;
+      noiseT += .0008*dt;
+      const W = cv.width, H = cv.height;
+      const L = live.current;
+      const { mx, my, phase, agOut } = L;
+      L.clicks = L.clicks.filter(c => now-c.t < 1200);
+
+      const [tr,tg,tb] = PHASE_TINT[phase]||PHASE_TINT.idle;
+      ctx.fillStyle = `rgba(${9+tr},${11+tg},${16+tb},0.15)`;
+      ctx.fillRect(0, 0, W, H);
+
+      const speedM = phase==='running' ? 1.55 : phase==='orchestrating' ? 1.2 : 1;
+
+      for (const n of nodes) {
+        n.pt += .02*dt;
+        const st = n.agKey ? agOut[n.agKey]?.status : null;
+        n.glow = lerp(n.glow, st==='running'?1:st==='done'?.45:st==='error'?.75:0, .055*dt);
+
+        if (n.agKey) {
+          const prev = prevSt[n.agKey];
+          if (st==='running' && prev!=='running')
+            waves.push({ x:n.x, y:n.y, r:n.r, max:100+Math.random()*70, col:n.col, a:.85 });
+          prevSt[n.agKey] = st;
+        }
+
+        const nx = Math.sin(noiseT*1.73+n.id*.37)*Math.cos(noiseT*.91+n.id*.71) * .014*n.z;
+        const ny = Math.cos(noiseT*2.09+n.id*.51)*Math.sin(noiseT*1.31+n.id*.29) * .014*n.z;
+
+        const mdx = n.x-mx, mdy = n.y-my, md2 = mdx*mdx+mdy*mdy;
+        if (md2 < 160*160 && md2 > 1) {
+          const md = Math.sqrt(md2);
+          n.vx += (mdx/md)*(1-md/160)*.75*dt;
+          n.vy += (mdy/md)*(1-md/160)*.75*dt;
+        }
+
+        for (const c of L.clicks) {
+          const cdx=c.x-n.x, cdy=c.y-n.y, cd=Math.sqrt(cdx*cdx+cdy*cdy), age=(now-c.t)/1200;
+          if (cd<280 && cd>1) { const f=(1-cd/280)*(1-age)*3; n.vx+=cdx/cd*f*dt; n.vy+=cdy/cd*f*dt; }
+        }
+
+        n.vx += (W*.5-n.x)*.000028*dt;
+        n.vy += (H*.5-n.y)*.000028*dt;
+        n.vx = (n.vx+nx)*(1-.024*dt); n.vy = (n.vy+ny)*(1-.024*dt);
+        const spd = Math.sqrt(n.vx*n.vx+n.vy*n.vy), ms = .72*n.z*speedM;
+        if (spd>ms) { n.vx*=ms/spd; n.vy*=ms/spd; }
+        n.x += n.vx*dt; n.y += n.vy*dt;
+        const m=75;
+        if(n.x<m)n.vx+=(m-n.x)*.003*dt; if(n.x>W-m)n.vx-=(n.x-(W-m))*.003*dt;
+        if(n.y<m)n.vy+=(m-n.y)*.003*dt; if(n.y>H-m)n.vy-=(n.y-(H-m))*.003*dt;
+      }
+
+      const DIST=160, ADIST=225;
+      const connCount = new Map(nodes.map(n=>[n.id,0]));
+
+      for (let i=0;i<nodes.length;i++) for (let j=i+1;j<nodes.length;j++) {
+        const a=nodes[i], b=nodes[j];
+        const dx=a.x-b.x, dy=a.y-b.y, d2=dx*dx+dy*dy;
+        const thr=(a.agKey||b.agKey)?ADIST:DIST;
+        if (d2>thr*thr) continue;
+        const d=Math.sqrt(d2), t=1-d/thr;
+        connCount.set(a.id,(connCount.get(a.id)||0)+1);
+        connCount.set(b.id,(connCount.get(b.id)||0)+1);
+        const aAct=a.agKey&&agOut[a.agKey]?.status==='running';
+        const bAct=b.agKey&&agOut[b.agKey]?.status==='running';
+        const active=aAct||bAct;
+        const alpha=t*(active?.52:.1)*Math.min(a.z,b.z);
+        const [ar,ag_,ab_]=hexRgb(a.col),[br,bg_,bb_]=hexRgb(b.col);
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+        ctx.strokeStyle=`rgba(${(ar+br)>>1},${(ag_+bg_)>>1},${(ab_+bb_)>>1},${alpha})`;
+        ctx.lineWidth=active?t*1.9:t*.65; ctx.stroke();
+        if (active&&Math.random()<.0018*dt)
+          packets.push({ai:a.id,bi:b.id,p:0,s:.003+Math.random()*.005,col:Math.random()<.5?a.col:b.col,fwd:Math.random()<.5});
+        if (!active&&Math.random()<.00007*dt)
+          fires.push({x1:a.x,y1:a.y,x2:b.x,y2:b.y,col:a.col,life:.7});
+      }
+
+      for (let i=fires.length-1;i>=0;i--) {
+        const f=fires[i]; f.life-=.065*dt;
+        if(f.life<=0){fires.splice(i,1);continue;}
+        const [fr,fg_,fb_]=hexRgb(f.col);
+        ctx.beginPath(); ctx.moveTo(f.x1,f.y1); ctx.lineTo(f.x2,f.y2);
+        ctx.strokeStyle=`rgba(${fr},${fg_},${fb_},${f.life})`; ctx.lineWidth=1.6; ctx.stroke();
+      }
+
+      for (let i=waves.length-1;i>=0;i--) {
+        const w=waves[i]; w.r+=2.4*dt; w.a-=.014*dt;
+        if(w.a<=0||w.r>w.max){waves.splice(i,1);continue;}
+        const [wr,wg,wb]=hexRgb(w.col);
+        ctx.beginPath(); ctx.arc(w.x,w.y,w.r,0,Math.PI*2);
+        ctx.strokeStyle=`rgba(${wr},${wg},${wb},${w.a})`; ctx.lineWidth=1.5; ctx.stroke();
+      }
+
+      for (let i=packets.length-1;i>=0;i--) {
+        const pk=packets[i], na=nodeMap.get(pk.ai), nb=nodeMap.get(pk.bi);
+        if(!na||!nb){packets.splice(i,1);continue;}
+        pk.p+=pk.s*dt;
+        if(pk.p>=1){packets.splice(i,1);continue;}
+        const [fx,fy,tx,ty]=pk.fwd?[na.x,na.y,nb.x,nb.y]:[nb.x,nb.y,na.x,na.y];
+        const px=lerp(fx,tx,pk.p), py=lerp(fy,ty,pk.p);
+        const [cr,cg,cb]=hexRgb(pk.col);
+        ctx.beginPath(); ctx.arc(px,py,2.6,0,Math.PI*2);
+        ctx.fillStyle=`rgba(${cr},${cg},${cb},.9)`; ctx.fill();
+        for(let ti=1;ti<=4;ti++){
+          const tp=Math.max(0,pk.p-ti*.022);
+          ctx.beginPath(); ctx.arc(lerp(fx,tx,tp),lerp(fy,ty,tp),2.6-ti*.45,0,Math.PI*2);
+          ctx.fillStyle=`rgba(${cr},${cg},${cb},${.55-ti*.11})`; ctx.fill();
+        }
+      }
+
+      for (const n of nodes) {
+        const pulse=.78+.22*Math.sin(n.pt);
+        const nr=n.r*pulse*(1+n.glow*.55);
+        const cc=connCount.get(n.id)||0, hub=Math.min(cc/8,1)*.35;
+        const [R,G,B]=hexRgb(n.col);
+        const st=n.agKey?agOut[n.agKey]?.status:null;
+        const gr=st==='error'?[248,81,73]:[R,G,B];
+        if(n.glow+hub>.05){
+          const gR=nr*(7+(n.glow+hub)*15);
+          const g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,gR);
+          g.addColorStop(0,`rgba(${gr[0]},${gr[1]},${gr[2]},${(n.glow+hub)*.32})`);
+          g.addColorStop(1,`rgba(${gr[0]},${gr[1]},${gr[2]},0)`);
+          ctx.beginPath(); ctx.arc(n.x,n.y,gR,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+        }
+        ctx.beginPath(); ctx.arc(n.x,n.y,nr,0,Math.PI*2);
+        ctx.fillStyle=`rgba(${R},${G},${B},${n.agKey?(.65+n.glow*.35):(.2+n.z*.3)})`;
+        ctx.fill();
+        if(n.agKey&&n.glow>.28){
+          ctx.font=`${8+n.glow*5}px monospace`;
+          ctx.fillStyle=`rgba(${R},${G},${B},${n.glow*.8})`;
+          ctx.textAlign='center'; ctx.fillText(AGENTS[n.agKey].i,n.x,n.y-nr-4);
+        }
+      }
+
+      rafRef.current = requestAnimationFrame(frame);
+    }
+
+    ctx.fillStyle='#090b10'; ctx.fillRect(0,0,cv.width,cv.height);
+    rafRef.current = requestAnimationFrame(frame);
+
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      window.removeEventListener('resize', resize);
+      window.removeEventListener('mousemove', onMM);
+      document.removeEventListener('mouseleave', onML);
+      window.removeEventListener('click', onCk);
+    };
+  }, []);
+
+  return <canvas ref={cvRef} style={{position:'fixed',inset:0,zIndex:0,pointerEvents:'none',opacity:.72}}/>;
 }
 
 // ── APP ───────────────────────────────────────────────────────────────────────
@@ -601,7 +811,9 @@ export default function App() {
   if(!landed)return <Landing onStart={()=>setLanded(true)} onSignIn={()=>{setLanded(true);setShowAuth(true);}}/>;
 
   return (
-    <div style={{background:T.bg,color:T.text,fontFamily:"'Courier New',monospace",minHeight:"100vh",fontSize:"13px"}}>
+    <>
+    <NeuralSwarmBg agOut={agOut} phase={phase}/>
+    <div style={{background:"transparent",color:T.text,fontFamily:"'Courier New',monospace",minHeight:"100vh",fontSize:"13px"}}>
       {/* HEADER */}
       <div style={{background:T.bg2,borderBottom:`1px solid ${T.border2}`,padding:"8px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50}}>
         <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
@@ -876,5 +1088,6 @@ export default function App() {
       {showAuth&&<AuthModal sbUrl={sbUrl} sbKey={sbKey} onSession={s=>{setSession(s);setShowAuth(false);}} onSkip={()=>setShowAuth(false)}/>}
       <style>{`select option{background:#0d111a}::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:#090b10}::-webkit-scrollbar-thumb{background:#1e2840}input::placeholder,textarea::placeholder{color:#334}`}</style>
     </div>
+    </>
   );
 }
