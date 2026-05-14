@@ -38,12 +38,18 @@ const sec={color:T.dim,fontSize:"10px",textTransform:"uppercase",letterSpacing:"
 const rankScore=t=>(t.rating?parseFloat(t.rating):0)*2+Math.log10((t.usage||t.usage_count||0)+1);
 
 // ── API ───────────────────────────────────────────────────────────────────────
-async function streamClaude({messages,system,onToken,onDone,onErr,_key="",_proxy="",_jwt="",_maxTok=1000}) {
+const MODELS=[
+  {id:"claude-sonnet-4-20250514",  label:"Sonnet 4"},
+  {id:"claude-opus-4-20250514",    label:"Opus 4"},
+  {id:"claude-haiku-4-5-20251001", label:"Haiku 4.5"},
+  {id:"claude-sonnet-3-7-20250219",label:"Sonnet 3.7"},
+];
+async function streamClaude({messages,system,onToken,onDone,onErr,_key="",_proxy="",_jwt="",_maxTok=1000,_model=""}) {
   const up=!!_proxy;
   const url=up?_proxy:"https://api.anthropic.com/v1/messages";
   const hdr=up?{"Content-Type":"application/json","Authorization":`Bearer ${_jwt||_key}`}:{"Content-Type":"application/json","x-api-key":_key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
   try {
-    const res=await fetch(url,{method:"POST",headers:hdr,body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:_maxTok,stream:true,system,messages})});
+    const res=await fetch(url,{method:"POST",headers:hdr,body:JSON.stringify({model:_model||"claude-sonnet-4-20250514",max_tokens:_maxTok,stream:true,system,messages})});
     if (!res.ok) {
       const ct=res.headers.get("content-type")||"";
       const body=ct.includes("json")?(await res.json()).error?.message:await res.text();
@@ -63,11 +69,11 @@ async function streamClaude({messages,system,onToken,onDone,onErr,_key="",_proxy
     onDone();
   } catch(e){onErr(e.message);}
 }
-async function callClaude({messages,system,_key="",_proxy="",_jwt=""}) {
+async function callClaude({messages,system,_key="",_proxy="",_jwt="",_model=""}) {
   const up=!!_proxy;
   const url=up?_proxy:"https://api.anthropic.com/v1/messages";
   const hdr=up?{"Content-Type":"application/json","Authorization":`Bearer ${_jwt||_key}`}:{"Content-Type":"application/json","x-api-key":_key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
-  const res=await fetch(url,{method:"POST",headers:hdr,body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system,messages})});
+  const res=await fetch(url,{method:"POST",headers:hdr,body:JSON.stringify({model:_model||"claude-sonnet-4-20250514",max_tokens:1000,system,messages})});
   const ct=res.headers.get("content-type")||"";
   if(!ct.includes("json")){const t=await res.text();throw new Error(`HTTP ${res.status}: ${t.slice(0,120)}`);}
   const d=await res.json();
@@ -101,19 +107,25 @@ function mkAuth(url,key) {
 }
 
 // ── SUB-COMPONENTS ────────────────────────────────────────────────────────────
-function AgentCard({name,out}) {
+function AgentCard({name,out,onRetry}) {
   const ag=AGENTS[name];if(!ag)return null;
+  const [expanded,setExpanded]=useState(true);
   return (
-    <div style={{border:`1px solid ${out.status==="running"?ag.c:T.border}`,background:out.status==="running"?`${ag.c}08`:T.bg2,padding:"10px",marginBottom:"8px",boxShadow:out.status==="running"?`0 0 8px ${ag.c}22`:"none"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
-        <div style={{color:ag.c,fontSize:"11px",letterSpacing:"3px",fontWeight:"bold"}}>{ag.i} {name}</div>
+    <div style={{border:`1px solid ${out.status==="running"?ag.c:out.status==="error"?T.orange:T.border}`,background:out.status==="running"?`${ag.c}08`:T.bg2,padding:"10px",marginBottom:"8px",boxShadow:out.status==="running"?`0 0 8px ${ag.c}22`:"none"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:expanded?"6px":"0"}}>
+        <div style={{display:"flex",alignItems:"center",gap:"8px",cursor:"pointer"}} onClick={()=>setExpanded(p=>!p)}>
+          <div style={{color:ag.c,fontSize:"11px",letterSpacing:"3px",fontWeight:"bold"}}>{ag.i} {name}</div>
+          <span style={{color:T.dim,fontSize:"10px"}}>{expanded?"▼":"▶"}</span>
+        </div>
         <div style={{display:"flex",gap:"5px",alignItems:"center"}}>
+          {out.elapsed&&<span style={{color:T.dim,fontSize:"10px"}}>{out.elapsed}s</span>}
           <span style={Dot(out.status)}></span>
           <span style={{color:T.muted,fontSize:"10px"}}>{out.status}</span>
           {out.status==="done"&&<button onClick={()=>navigator.clipboard?.writeText(out.text)} style={{...Btn(T.dim),padding:"2px 8px",fontSize:"10px"}}>COPY</button>}
+          {out.status==="error"&&onRetry&&<button onClick={()=>onRetry(name)} style={{...Btn(T.orange),padding:"2px 8px",fontSize:"10px"}}>RETRY</button>}
         </div>
       </div>
-      <div style={{color:"#8af",fontSize:"12px",lineHeight:1.6,whiteSpace:"pre-wrap",maxHeight:"220px",overflowY:"auto"}}>{out.text}{out.status==="running"&&"▋"}</div>
+      {expanded&&<div style={{color:"#8af",fontSize:"12px",lineHeight:1.6,whiteSpace:"pre-wrap",maxHeight:"220px",overflowY:"auto"}}>{out.text}{out.status==="running"&&"▋"}</div>}
     </div>
   );
 }
@@ -658,11 +670,18 @@ export default function App() {
   const [mktCat,setMktCat]=useState("All");const [mktSearch,setMktSearch]=useState("");const [mktSort,setMktSort]=useState("Popular");
   const [purchased,  setPurchased] = useState(new Set());
   const [forkedFrom, setForkedFrom]= useState(null);
+  const [model,      setModel]     = useState("claude-sonnet-4-20250514");
+  const [parallel,   setParallel]  = useState(false);
+  const [histSearch, setHistSearch]= useState("");
+  const [agTimes,    setAgTimes]   = useState({});
+  const [runProgress,setRunProgress]=useState(0);
+  const [customMaxTok,setCustomMaxTok]=useState(0);
   const abortRef=useRef(false);
+  const agTimerRef=useRef({});
 
   const isGated=plan==="free"&&runCount>=FREE_LIMIT;
   const jwt=session?.access_token||sbKey;
-  const cA={_key:apiKey,_proxy:proxyUrl,_jwt:jwt};
+  const cA={_key:apiKey,_proxy:proxyUrl,_jwt:jwt,_model:model};
   const phaseColor={idle:T.dim,orchestrating:T.yellow,running:T.cyan,overseeing:T.purple,done:T.green};
   const branches=["all",...new Set(["main",...runs.map(r=>r.branch||"main")])];
   const addLog=m=>setLogs(p=>[...p.slice(-60),`${new Date().toLocaleTimeString()} — ${m}`]);
@@ -684,6 +703,15 @@ export default function App() {
       window.history.replaceState({},"",window.location.pathname);
     }
   },[]);
+
+  useEffect(()=>{
+    if(Notification.permission==="default")Notification.requestPermission();
+    const h=e=>{
+      if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();if(!running&&goal.trim()&&(apiKey||proxyUrl))handleRun();}
+      if(e.key==="Escape"&&running){abortRef.current=true;setRunning(false);setPhase("idle");}
+    };
+    window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);
+  },[running,goal,apiKey,proxyUrl,handleRun]);
 
   const loadRuns=useCallback(async()=>{
     if(!sbUrl||!sbKey)return;
@@ -721,43 +749,103 @@ export default function App() {
     }catch(e){setSbStatus("error");addLog("Save error: "+e.message);}
   },[sbUrl,sbKey,goal,branch,commitMsg,runs,session]);
 
+  const exportMarkdown=useCallback(()=>{
+    const lines=[`# Neural Swarm Run\n**Goal:** ${goal}\n**Branch:** ${branch}\n**Date:** ${new Date().toLocaleString()}\n`];
+    Object.entries(agOut).forEach(([name,out])=>{
+      lines.push(`## ${AGENTS[name]?.i||""} ${name}\n\`\`\`\n${out.text}\n\`\`\`\n`);
+    });
+    if(overseer)lines.push(`## ◈ OVERSEER\n${overseer}\n`);
+    const blob=new Blob([lines.join("\n")],{type:"text/markdown"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`swarm-${Date.now()}.md`;a.click();
+  },[goal,branch,agOut,overseer]);
+
+  const copyAll=useCallback(()=>{
+    const parts=Object.entries(agOut).map(([name,out])=>`=== ${name} ===\n${out.text}`);
+    if(overseer)parts.push(`=== OVERSEER ===\n${overseer}`);
+    navigator.clipboard?.writeText(parts.join("\n\n"));
+  },[agOut,overseer]);
+
   const handleRun=useCallback(async()=>{
     if(!proxyUrl&&!apiKey)return alert("Enter API key or proxy URL in ⚙ Settings.");
     if(!goal.trim())return alert("Enter a goal.");
     if(isGated){setShowUpg(true);return;}
     abortRef.current=false;setRunning(true);setPhase("orchestrating");
-    setAgOut({});setOverseer("");setLogs([]);setSbStatus("");setRunCost(0);
+    setAgOut({});setOverseer("");setLogs([]);setSbStatus("");setRunCost(0);setAgTimes({});setRunProgress(0);
+    agTimerRef.current={};
     addLog(proxyUrl?"Routing via proxy...":"Direct API mode.");
+    addLog(`Model: ${model}${parallel?" · parallel":""}`);
     let plan_;
     try{
       const raw=await callClaude({system:`You are an orchestrator for a multi-agent AI system. Available: ${Object.keys(AGENTS).join(", ")}. Pick 2-5 agents for the user's goal in execution order. Write specific instructions per agent. Respond ONLY as valid JSON: {"agents":[{"name":"AGENT_NAME","instruction":"..."}]}`,messages:[{role:"user",content:goal}],...cA});
       plan_=JSON.parse(raw.replace(/```json|```/g,"").trim());
-      addLog("Plan: "+plan_.agents.map(a=>a.name).join(" → "));
+      addLog("Plan: "+plan_.agents.map(a=>a.name).join(parallel?" ∥ ":" → "));
     }catch(e){addLog("Orchestrator error: "+e.message);setPhase("idle");setRunning(false);return;}
     setPhase("running");
     const ctx=[],finals={};let totalTok=0;
-    const maxTok=PLAN_TOKENS[plan]||PLAN_TOKENS.free;
-    for(const step of plan_.agents) {
-      if(abortRef.current)break;
-      const ag=AGENTS[step.name];if(!ag)continue;
+    const maxTok=customMaxTok||PLAN_TOKENS[plan]||PLAN_TOKENS.free;
+    const steps=plan_.agents.filter(s=>AGENTS[s.name]);
+    const total=steps.length;
+
+    const runStep=async(step,ctxBlock,idx)=>{
+      if(abortRef.current)return;
+      const ag=AGENTS[step.name];
       addLog(`[${step.name}] starting...`);
       setAgOut(p=>({...p,[step.name]:{text:"",status:"running"}}));
-      const ctxBlock=ctx.length>=2?await compressCtx(ctx,goal,cA._key,cA._proxy,cA._jwt):ctx.length?`\n\nPREVIOUS OUTPUTS:\n${ctx.map(c=>`[${c.agent}]: ${c.output.slice(0,500)}`).join("\n\n")}` :"";
+      agTimerRef.current[step.name]=Date.now();
       let full="",tokCount=0;
       await streamClaude({system:ag.sys,messages:[{role:"user",content:`GOAL: ${goal}\n\nTASK: ${step.instruction}${ctxBlock}`}],
         onToken:t=>{full+=t;tokCount++;setAgOut(p=>({...p,[step.name]:{text:(p[step.name]?.text||"")+t,status:"running"}}));},
-        onDone:()=>{totalTok+=tokCount;setRunCost(totalTok*COST_PER_TOK);setAgOut(p=>({...p,[step.name]:{...p[step.name],status:"done"}}));ctx.push({agent:step.name,output:full});finals[step.name]={text:full,status:"done"};addLog(`[${step.name}] done. ~${tokCount} tok`);},
+        onDone:()=>{
+          const elapsed=((Date.now()-agTimerRef.current[step.name])/1000).toFixed(1);
+          totalTok+=tokCount;setRunCost(totalTok*COST_PER_TOK);
+          setAgOut(p=>({...p,[step.name]:{...p[step.name],status:"done",elapsed}}));
+          setAgTimes(p=>({...p,[step.name]:elapsed}));
+          ctx.push({agent:step.name,output:full});finals[step.name]={text:full,status:"done",elapsed};
+          setRunProgress(Math.round(((idx+1)/total)*80));
+          addLog(`[${step.name}] done in ${elapsed}s ~${tokCount} tok`);
+        },
         onErr:e=>{setAgOut(p=>({...p,[step.name]:{text:"ERROR: "+e,status:"error"}}));finals[step.name]={text:"ERROR: "+e,status:"error"};addLog(`[${step.name}] error.`);},
         ...cA,_maxTok:maxTok});
+      return full;
+    };
+
+    if(parallel){
+      const ctxBlock="";
+      await Promise.all(steps.map((step,i)=>runStep(step,ctxBlock,i)));
+    } else {
+      for(let i=0;i<steps.length;i++){
+        if(abortRef.current)break;
+        const ctxBlock=ctx.length>=2?await compressCtx(ctx,goal,cA._key,cA._proxy,cA._jwt):ctx.length?`\n\nPREVIOUS OUTPUTS:\n${ctx.map(c=>`[${c.agent}]: ${c.output.slice(0,500)}`).join("\n\n")}` :"";
+        await runStep(steps[i],ctxBlock,i);
+      }
     }
-    setPhase("overseeing");addLog("Overseer evaluating...");
+
+    setPhase("overseeing");setRunProgress(85);addLog("Overseer evaluating...");
     let ov="";
     await streamClaude({system:"You are an Overseer AI. Evaluate agent outputs against the user's goal. Score /10. List what's missing, corrections, concrete next steps.",messages:[{role:"user",content:`GOAL: ${goal}\n\nOUTPUTS:\n${ctx.map(c=>`[${c.agent}]:\n${c.output}`).join("\n\n---\n\n")}`}],
       onToken:t=>{ov+=t;setOverseer(o=>o+t);},
-      onDone:async()=>{addLog("Complete. ~"+totalTok+" tokens total");setPhase("done");setRunning(false);setRunCount(c=>c+1);await saveRun(finals,ov,totalTok);await loadRuns();},
+      onDone:async()=>{
+        setRunProgress(100);addLog("Complete. ~"+totalTok+" tokens total");setPhase("done");setRunning(false);setRunCount(c=>c+1);
+        if(Notification.permission==="granted")new Notification("⬡ Swarm Complete",{body:goal.slice(0,80),icon:"/icon.svg"});
+        try{const saved=JSON.parse(localStorage.getItem("ns_runs")||"[]");localStorage.setItem("ns_runs",JSON.stringify([{id:"l"+Date.now(),goal,branch,agents:finals,overseer:ov,created_at:new Date().toISOString()},...saved].slice(0,20)));}catch{}
+        await saveRun(finals,ov,totalTok);await loadRuns();
+      },
       onErr:e=>{setOverseer("ERROR: "+e);setPhase("done");setRunning(false);},
       ...cA,_maxTok:maxTok});
-  },[apiKey,proxyUrl,goal,plan,isGated,jwt,saveRun,loadRuns]);
+  },[apiKey,proxyUrl,goal,plan,isGated,jwt,saveRun,loadRuns,model,parallel,customMaxTok]);
+
+  const retryAgent=useCallback(async(name)=>{
+    const ag=AGENTS[name];if(!ag||!goal.trim()||(!(proxyUrl||apiKey)))return;
+    setAgOut(p=>({...p,[name]:{text:"",status:"running"}}));
+    agTimerRef.current[name]=Date.now();
+    let full="",tokCount=0;
+    const maxTok=customMaxTok||PLAN_TOKENS[plan]||PLAN_TOKENS.free;
+    await streamClaude({system:ag.sys,messages:[{role:"user",content:`GOAL: ${goal}\n\nTASK: Retry and complete your task for this goal.`}],
+      onToken:t=>{full+=t;tokCount++;setAgOut(p=>({...p,[name]:{text:(p[name]?.text||"")+t,status:"running"}}));},
+      onDone:()=>{const el=((Date.now()-agTimerRef.current[name])/1000).toFixed(1);setAgOut(p=>({...p,[name]:{...p[name],status:"done",elapsed:el}}));addLog(`[${name}] retried in ${el}s ~${tokCount} tok`);},
+      onErr:e=>{setAgOut(p=>({...p,[name]:{text:"ERROR: "+e,status:"error"}}));},
+      ...cA,_maxTok:maxTok});
+  },[goal,plan,proxyUrl,apiKey,jwt,model,customMaxTok]);
 
   const branchFrom=run=>{setGoal(run.goal||"");setBranch("branch-"+Date.now().toString(36));setCommitMsg("Branched from v"+(run.version_num||"?"));setTab("swarm");};
   const restoreRun=run=>{setGoal(run.goal||"");setBranch(run.branch||"main");setCommitMsg("Restored v"+(run.version_num||"?"));setTab("swarm");};
@@ -806,7 +894,7 @@ export default function App() {
     .filter(t=>(mktCat==="All"||t.cat===mktCat)&&(!mktSearch||(t.name+t.desc+(t.tags||[]).join(" ")).toLowerCase().includes(mktSearch.toLowerCase())))
     .sort((a,b)=>mktSort==="Popular"?(b.usage||0)-(a.usage||0):mktSort==="Top Rated"?rankScore(b)-rankScore(a):0);
 
-  const filteredRuns=runs.filter(r=>brFilter==="all"||(r.branch||"main")===brFilter);
+  const filteredRuns=runs.filter(r=>(brFilter==="all"||(r.branch||"main")===brFilter)&&(!histSearch||(r.goal||"").toLowerCase().includes(histSearch.toLowerCase())));
 
   if(!landed)return <Landing onStart={()=>setLanded(true)} onSignIn={()=>{setLanded(true);setShowAuth(true);}}/>;
 
@@ -848,6 +936,16 @@ export default function App() {
               </div>
             </div>
           ))}
+          <div style={{flex:"0 0 140px"}}>
+            <div style={lbl}>Model</div>
+            <select style={{...bi,padding:"5px 8px",fontSize:"11px"}} value={model} onChange={e=>setModel(e.target.value)}>
+              {MODELS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          </div>
+          <div style={{flex:"0 0 130px"}}>
+            <div style={lbl}>Max Tokens (0=auto)</div>
+            <input style={{...bi,padding:"5px 8px",fontSize:"11px"}} type="number" value={customMaxTok} onChange={e=>setCustomMaxTok(parseInt(e.target.value)||0)} min="0" max="8000" step="100"/>
+          </div>
           <button style={{...Btn(T.dim),padding:"6px 12px",fontSize:"10px"}} onClick={()=>setSettings(false)}>DONE</button>
         </div>
       )}
@@ -889,14 +987,28 @@ export default function App() {
                 <div><div style={lbl}>Commit</div><input style={{...bi,padding:"5px 8px",fontSize:"11px"}} value={commitMsg} onChange={e=>setCommitMsg(e.target.value)} placeholder="Optional..."/></div>
               </div>
               {goal.trim()&&<div style={{background:T.bg3,border:`1px solid ${T.border}`,padding:"6px 10px",marginTop:"6px",display:"flex",justifyContent:"space-between"}}><span style={{color:T.muted,fontSize:"10px"}}>EST. COST</span><span style={{color:T.yellow,fontSize:"11px"}}>~$0.02–0.04</span></div>}
-              <div style={{display:"flex",gap:"5px",marginTop:"8px",flexWrap:"wrap"}}>
+              <div style={{display:"flex",gap:"5px",marginTop:"8px",flexWrap:"wrap",alignItems:"center"}}>
                 <button style={Btn(isGated?T.purple:T.cyan,running||(!isGated&&(!goal.trim()||(!apiKey&&!proxyUrl))))} onClick={isGated?()=>setShowUpg(true):handleRun} disabled={running||(!isGated&&(!goal.trim()||(!apiKey&&!proxyUrl)))}>
                   {isGated?"↑ UPGRADE":running?"RUNNING...":"▶ DISPATCH"}
                 </button>
+                <button title={parallel?"Sequential mode":"Parallel mode"} style={{...Btn(parallel?T.yellow:T.dim),padding:"8px 10px",fontSize:"10px"}} onClick={()=>setParallel(p=>!p)}>{parallel?"∥":"→"}</button>
                 {running&&<button style={Btn(T.orange)} onClick={()=>{abortRef.current=true;setRunning(false);setPhase("idle");}}>ABORT</button>}
-                {phase==="done"&&<button style={Btn(T.dim)} onClick={()=>{setAgOut({});setOverseer("");setLogs([]);setPhase("idle");setSbStatus("");setRunCost(0);}}>RESET</button>}
+                {phase==="done"&&<button style={Btn(T.dim)} onClick={()=>{setAgOut({});setOverseer("");setLogs([]);setPhase("idle");setSbStatus("");setRunCost(0);setRunProgress(0);}}>RESET</button>}
                 {phase==="done"&&<button style={{...Btn(T.pink),padding:"8px 10px",fontSize:"10px"}} onClick={()=>setSaveOpen(true)}>+TPL</button>}
+                {phase==="done"&&<button style={{...Btn(T.cyan),padding:"8px 10px",fontSize:"10px"}} onClick={copyAll} title="Copy all outputs">⎘</button>}
+                {phase==="done"&&<button style={{...Btn("#3ecf8e"),padding:"8px 10px",fontSize:"10px"}} onClick={exportMarkdown} title="Export as Markdown">↓MD</button>}
               </div>
+              {running&&runProgress>0&&(
+                <div style={{marginTop:"8px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:"3px"}}>
+                    <span style={{color:T.muted,fontSize:"10px"}}>PROGRESS</span>
+                    <span style={{color:T.cyan,fontSize:"10px"}}>{runProgress}%</span>
+                  </div>
+                  <div style={{height:"3px",background:T.bg3,borderRadius:"2px"}}>
+                    <div style={{height:"100%",width:`${runProgress}%`,background:`linear-gradient(90deg,${T.cyan},${T.purple})`,borderRadius:"2px",transition:"width .4s ease"}}/>
+                  </div>
+                </div>
+              )}
               <div style={sec}>Agents</div>
               {Object.entries(AGENTS).map(([name,ag])=>{
                 const out=agOut[name];
@@ -919,7 +1031,7 @@ export default function App() {
                   {sbUrl&&sbKey&&<div style={{color:"#3ecf8e",fontSize:"10px",marginTop:"8px"}}>⚡ Supabase connected</div>}
                 </div>
               )}
-              {Object.keys(agOut).map(name=><AgentCard key={name} name={name} out={agOut[name]}/>)}
+              {Object.keys(agOut).map(name=><AgentCard key={name} name={name} out={agOut[name]} onRetry={retryAgent}/>)}
               {(overseer||phase==="overseeing")&&(
                 <div style={{border:`1px solid ${T.purple}`,background:"#0d0815",padding:"12px",marginTop:"8px",boxShadow:`0 0 12px ${T.purple}22`}}>
                   <div style={{color:T.purple,fontSize:"11px",letterSpacing:"3px",marginBottom:"8px"}}>◈ OVERSEER EVALUATION</div>
@@ -991,6 +1103,7 @@ export default function App() {
             )}
             {diffA&&diffB&&<DiffView a={diffA} b={diffB} onClose={()=>{setDiffA(null);setDiffB(null);setPickDiff(false);}}/>}
             <div style={{display:"flex",gap:"7px",marginBottom:"12px",alignItems:"center",flexWrap:"wrap"}}>
+              <input style={{...bi,width:"160px",padding:"5px 9px"}} placeholder="Search runs..." value={histSearch} onChange={e=>setHistSearch(e.target.value)}/>
               <button style={Btn("#3ecf8e",runsLoading)} onClick={loadRuns} disabled={runsLoading}>{runsLoading?"LOADING...":"↺ REFRESH"}</button>
               {pickDiff
                 ?<div style={{color:T.yellow,fontSize:"11px"}}>SELECT {diffA?"2ND":"1ST"} RUN ·&nbsp;<button onClick={()=>{setPickDiff(false);setDiffA(null);setDiffB(null);}} style={{background:"none",border:"none",color:T.orange,cursor:"pointer",fontFamily:"inherit",fontSize:"11px"}}>cancel</button></div>
