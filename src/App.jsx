@@ -39,12 +39,47 @@ const rankScore=t=>(t.rating?parseFloat(t.rating):0)*2+Math.log10((t.usage||t.us
 
 // ── API ───────────────────────────────────────────────────────────────────────
 const MODELS=[
-  {id:"claude-sonnet-4-20250514",  label:"Sonnet 4"},
-  {id:"claude-opus-4-20250514",    label:"Opus 4"},
-  {id:"claude-haiku-4-5-20251001", label:"Haiku 4.5"},
-  {id:"claude-sonnet-3-7-20250219",label:"Sonnet 3.7"},
+  {id:"claude-sonnet-4-20250514",  label:"Sonnet 4",         provider:"anthropic"},
+  {id:"claude-opus-4-20250514",    label:"Opus 4",           provider:"anthropic"},
+  {id:"claude-haiku-4-5-20251001", label:"Haiku 4.5",        provider:"anthropic"},
+  {id:"claude-sonnet-3-7-20250219",label:"Sonnet 3.7",       provider:"anthropic"},
+  {id:"gemini-2.5-pro",            label:"Gemini 2.5 Pro",   provider:"gemini"},
+  {id:"gemini-2.5-flash",          label:"Gemini 2.5 Flash", provider:"gemini"},
+  {id:"gemini-2.0-flash",          label:"Gemini 2.0 Flash", provider:"gemini"},
 ];
-async function streamClaude({messages,system,onToken,onDone,onErr,_key="",_proxy="",_jwt="",_maxTok=1000,_model=""}) {
+const isGemini=id=>id?.startsWith("gemini");
+async function streamGemini({messages,system,onToken,onDone,onErr,_geminiKey="",_maxTok=1000,_model="gemini-2.5-flash"}) {
+  if(!_geminiKey){onErr("Gemini API key not set — add it in ⚙ Settings.");return;}
+  const url=`https://generativelanguage.googleapis.com/v1beta/models/${_model}:streamGenerateContent?alt=sse&key=${_geminiKey}`;
+  const body={contents:messages.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]})),generationConfig:{maxOutputTokens:_maxTok},...(system?{systemInstruction:{parts:[{text:system}]}}:{})};
+  try {
+    const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(!res.ok){const d=await res.json().catch(()=>({}));onErr(`HTTP ${res.status}: ${d.error?.message||"Gemini error"}`);return;}
+    const reader=res.body.getReader(),dec=new TextDecoder();let buf="";
+    while(true){
+      const {done,value}=await reader.read();if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split("\n");buf=lines.pop();
+      for(const l of lines){
+        if(!l.startsWith("data:"))continue;
+        const raw=l.slice(5).trim();if(raw==="[DONE]")continue;
+        try{const ev=JSON.parse(raw);const t=ev.candidates?.[0]?.content?.parts?.[0]?.text;if(t)onToken(t);}catch{}
+      }
+    }
+    onDone();
+  }catch(e){onErr(e.message);}
+}
+async function callGemini({messages,system,_geminiKey="",_maxTok=1000,_model="gemini-2.5-flash"}) {
+  if(!_geminiKey)throw new Error("Gemini API key not set — add it in ⚙ Settings.");
+  const url=`https://generativelanguage.googleapis.com/v1beta/models/${_model}:generateContent?key=${_geminiKey}`;
+  const body={contents:messages.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]})),generationConfig:{maxOutputTokens:_maxTok},...(system?{systemInstruction:{parts:[{text:system}]}}:{})};
+  const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const d=await res.json();
+  if(!res.ok)throw new Error(d.error?.message||`HTTP ${res.status}`);
+  return d.candidates?.[0]?.content?.parts?.[0]?.text||"";
+}
+async function streamClaude({messages,system,onToken,onDone,onErr,_key="",_proxy="",_jwt="",_maxTok=1000,_model="",_geminiKey=""}) {
+  if(isGemini(_model))return streamGemini({messages,system,onToken,onDone,onErr,_geminiKey,_maxTok,_model});
   const up=!!_proxy;
   const url=up?_proxy:"https://api.anthropic.com/v1/messages";
   const hdr=up?{"Content-Type":"application/json","Authorization":`Bearer ${_jwt||_key}`}:{"Content-Type":"application/json","x-api-key":_key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
@@ -69,7 +104,8 @@ async function streamClaude({messages,system,onToken,onDone,onErr,_key="",_proxy
     onDone();
   } catch(e){onErr(e.message);}
 }
-async function callClaude({messages,system,_key="",_proxy="",_jwt="",_model=""}) {
+async function callClaude({messages,system,_key="",_proxy="",_jwt="",_model="",_geminiKey=""}) {
+  if(isGemini(_model))return callGemini({messages,system,_geminiKey,_model});
   const up=!!_proxy;
   const url=up?_proxy:"https://api.anthropic.com/v1/messages";
   const hdr=up?{"Content-Type":"application/json","Authorization":`Bearer ${_jwt||_key}`}:{"Content-Type":"application/json","x-api-key":_key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
@@ -80,10 +116,10 @@ async function callClaude({messages,system,_key="",_proxy="",_jwt="",_model=""})
   if(!res.ok)throw new Error(d.error?.message||`HTTP ${res.status}`);
   return d.content?.[0]?.text||"";
 }
-async function compressCtx(ctx,goal,_key,_proxy,_jwt) {
+async function compressCtx(ctx,goal,_key,_proxy,_jwt,_model,_geminiKey) {
   if(!ctx.length)return"";
   try {
-    const s=await callClaude({system:"Summarize agent outputs into 3-5 compact sentences preserving ALL technical decisions, code, and key facts. No fluff.",messages:[{role:"user",content:`GOAL: ${goal}\n\n${ctx.map(c=>`[${c.agent}]: ${c.output.slice(0,600)}`).join("\n\n")}`}],_key,_proxy,_jwt});
+    const s=await callClaude({system:"Summarize agent outputs into 3-5 compact sentences preserving ALL technical decisions, code, and key facts. No fluff.",messages:[{role:"user",content:`GOAL: ${goal}\n\n${ctx.map(c=>`[${c.agent}]: ${c.output.slice(0,600)}`).join("\n\n")}`}],_key,_proxy,_jwt,_model,_geminiKey});
     return`\n\nPRIOR CONTEXT (compressed):\n${s}`;
   } catch{return`\n\nPRIOR CONTEXT:\n${ctx.map(c=>`[${c.agent}]: ${c.output.slice(0,300)}`).join("\n\n")}`;}
 }
@@ -107,8 +143,8 @@ function mkAuth(url,key) {
 }
 
 // ── SUB-COMPONENTS ────────────────────────────────────────────────────────────
-function AgentCard({name,out,onRetry}) {
-  const ag=AGENTS[name];if(!ag)return null;
+function AgentCard({name,out,onRetry,agDef}) {
+  const ag=agDef||AGENTS[name]||{c:T.muted,i:"⬡",sys:""};
   const [expanded,setExpanded]=useState(true);
   return (
     <div style={{border:`1px solid ${out.status==="running"?ag.c:out.status==="error"?T.orange:T.border}`,background:out.status==="running"?`${ag.c}08`:T.bg2,padding:"10px",marginBottom:"8px",boxShadow:out.status==="running"?`0 0 8px ${ag.c}22`:"none"}}>
@@ -333,17 +369,17 @@ function Landing({onStart,onSignIn}) {
   useEffect(()=>{const id=setInterval(()=>setTick(t=>(t+1)%(DEMO_LINES.length+3)),700);return()=>clearInterval(id);},[]);
   const ff="'Courier New',monospace";
   const caps=[
-    {i:"⬡",t:"10 Specialized Agents",d:"Architect, Coder, Debugger, Tester, Analyst, Refactorer, Researcher, Writer, Reviewer, Designer"},
+    {i:"⛓",t:"Chain Mode",d:"Sequential agents that actually collaborate — Architect's spec becomes Coder's input, which becomes Reviewer's target. Real multi-agent pipelines, not just parallel API calls.",hot:true},
+    {i:"⊕",t:"Custom Agent Builder",d:"Build your own specialists: Legal Reviewer, Brand Voice Editor, Domain Expert. Define name, icon, and system prompt. Runs in your swarm alongside the 10 built-ins.",hot:true},
+    {i:"⬡",t:"10 Specialized Agents",d:"Architect, Coder, Debugger, Tester, Analyst, Refactorer, Researcher, Writer, Reviewer, Designer — each with tuned system prompts."},
     {i:"⟷",t:"Version Control",d:"Branch, diff, restore. Git-style history for every AI output."},
     {i:"⚗",t:"Prompt Forge",d:`${PF_P.length*PF_T.length*PF_C.length} persona × tone × constraint combos to transform goals before dispatch.`},
-    {i:"◈",t:"Overseer Scoring",d:"Every run scored /10 with gaps and next steps identified automatically."},
-    {i:"⚡",t:"Supabase Persistence",d:"All runs auto-saved with history, cost tracking, and team access."},
-    {i:"🛒",t:"Template Marketplace",d:"Save, fork, and publish reusable agent workflows. Charge for premium ones."},
+    {i:"⬆",t:"Share & Integrate",d:"Export runs as GitHub Gists with one click. Send to any webhook — Slack, Notion, Zapier, your own API."},
   ];
   const plans=[
-    {n:"FREE",p:"$0",per:"forever",c:T.muted,feats:["5 runs/month","3 agents/run","Basic history","Community templates"]},
-    {n:"PRO",p:"$29",per:"/month",c:T.cyan,hot:true,feats:["Unlimited runs","All 10 agents","Full history + versioning","Save & share templates"]},
-    {n:"POWER",p:"$79",per:"/month",c:T.purple,feats:["Everything in Pro","Cost analytics","Team workspace","API access"]},
+    {n:"FREE",p:"$0",per:"forever",c:T.muted,feats:["5 runs/month","All 10 agents","Chain Mode","Custom Agents","Basic history"]},
+    {n:"PRO",p:"$29",per:"/month",c:T.cyan,hot:true,feats:["Unlimited runs","All 10 agents","Chain Mode","Custom Agents","Full history + versioning","Save & share templates","Gist & webhook export"]},
+    {n:"POWER",p:"$79",per:"/month",c:T.purple,feats:["Everything in Pro","Cost analytics","Team workspace","API access","Priority support"]},
   ];
   return (
     <>
@@ -359,8 +395,11 @@ function Landing({onStart,onSignIn}) {
       <section style={{padding:"60px 40px",maxWidth:"1100px",margin:"0 auto",display:"grid",gridTemplateColumns:"1fr 1fr",gap:"48px",alignItems:"center"}}>
         <div>
           <div style={{color:T.cyan,fontSize:"10px",letterSpacing:"5px",marginBottom:"12px",opacity:.7}}>MULTI-AGENT AI ORCHESTRATION</div>
-          <h1 style={{fontSize:"36px",fontWeight:"bold",lineHeight:1.2,margin:"0 0 16px",color:"#fff"}}>Your AI Dev Team.<br/><span style={{color:T.cyan}}>On Demand.</span></h1>
-          <p style={{color:"#667",fontSize:"13px",lineHeight:1.8,marginBottom:"24px"}}>Give a goal. Agents execute in sequence — architecting, coding, testing, reviewing. Every run versioned, scored, and saved.</p>
+          <h1 style={{fontSize:"36px",fontWeight:"bold",lineHeight:1.2,margin:"0 0 16px",color:"#fff"}}>10 AI Agents.<br/>One Goal.<br/><span style={{color:T.cyan}}>Real Collaboration.</span></h1>
+          <p style={{color:"#667",fontSize:"13px",lineHeight:1.8,marginBottom:"16px"}}>Agents don't just run in parallel — they build on each other. Architect designs, Coder implements it, Reviewer audits the code. Enable <span style={{color:T.pink}}>Chain Mode</span> and your AI team actually thinks together.</p>
+          <div style={{display:"flex",gap:"8px",flexWrap:"wrap",marginBottom:"20px"}}>
+            {["⛓ Chain Mode","⊕ Custom Agents","⬆ Gist Export","◈ Overseer Scoring"].map(f=><span key={f} style={{background:`${T.cyan}10`,border:`1px solid ${T.cyan}30`,color:T.cyan,fontSize:"10px",padding:"2px 8px",letterSpacing:"1px"}}>{f}</span>)}
+          </div>
           <div style={{display:"flex",gap:"10px",marginBottom:"10px"}}>
             <button onClick={onStart} style={{background:T.cyan,border:"none",color:T.bg,padding:"11px 26px",fontFamily:ff,fontSize:"12px",letterSpacing:"3px",fontWeight:"bold",cursor:"pointer"}}>START FREE →</button>
             <button onClick={()=>document.getElementById("ns-pricing")?.scrollIntoView({behavior:"smooth"})} style={{background:"transparent",border:`1px solid ${T.border}`,color:T.muted,padding:"11px 20px",fontFamily:ff,fontSize:"11px",letterSpacing:"2px",cursor:"pointer"}}>PRICING</button>
@@ -382,8 +421,9 @@ function Landing({onStart,onSignIn}) {
           <div style={{color:T.dim,fontSize:"10px",letterSpacing:"5px",textAlign:"center",marginBottom:"32px"}}>CAPABILITIES</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"12px"}}>
             {caps.map(f=>(
-              <div key={f.t} style={{border:`1px solid ${T.border}`,background:T.bg,padding:"16px"}}>
-                <div style={{color:T.cyan,fontSize:"18px",marginBottom:"7px"}}>{f.i}</div>
+              <div key={f.t} style={{border:`1px solid ${f.hot?T.pink:T.border}`,background:f.hot?`${T.pink}07`:T.bg,padding:"16px",position:"relative",boxShadow:f.hot?`0 0 14px ${T.pink}15`:"none"}}>
+                {f.hot&&<div style={{position:"absolute",top:"-9px",right:"10px",background:T.pink,color:T.bg,fontSize:"8px",letterSpacing:"2px",padding:"1px 7px",fontWeight:"bold"}}>NEW</div>}
+                <div style={{color:f.hot?T.pink:T.cyan,fontSize:"18px",marginBottom:"7px"}}>{f.i}</div>
                 <div style={{color:T.text,fontSize:"12px",fontWeight:"bold",marginBottom:"5px"}}>{f.t}</div>
                 <div style={{color:T.muted,fontSize:"10px",lineHeight:1.6}}>{f.d}</div>
               </div>
@@ -637,6 +677,7 @@ function NeuralSwarmBg({ agOut = {}, phase = 'idle' }) {
 export default function App() {
   const [landed,   setLanded]   = useState(false);
   const [apiKey,   setApiKey]   = useState(""); const [showKey,   setShowKey]   = useState(false);
+  const [geminiKey,setGeminiKey]= useState(""); const [showGeminiKey,setShowGeminiKey]=useState(false);
   const [proxyUrl, setProxyUrl] = useState("https://mrqblfyxwdgaarlemufo.supabase.co/functions/v1/swarm-proxy");
   const [sbUrl,    setSbUrl]    = useState("https://mrqblfyxwdgaarlemufo.supabase.co"); const [sbKey,    setSbKey]    = useState("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ycWJsZnl4d2RnYWFybGVtdWZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzNDg3NzQsImV4cCI6MjA5MTkyNDc3NH0.Xl0vNkUqMmh0036c-bmaHrGpbNdknim69RRyUOXHIqo"); const [showSbKey,setShowSbKey]=useState(false);
   const [settings, setSettings] = useState(false);
@@ -672,16 +713,26 @@ export default function App() {
   const [forkedFrom, setForkedFrom]= useState(null);
   const [model,      setModel]     = useState("claude-sonnet-4-20250514");
   const [parallel,   setParallel]  = useState(false);
+  const [chainMode,  setChainMode] = useState(false);
   const [histSearch, setHistSearch]= useState("");
   const [agTimes,    setAgTimes]   = useState({});
   const [runProgress,setRunProgress]=useState(0);
   const [customMaxTok,setCustomMaxTok]=useState(0);
+  const [webhookUrl, setWebhookUrl] = useState(()=>localStorage.getItem("ns_webhook")||"");
+  const [customAgents,setCustomAgents]=useState(()=>{try{return JSON.parse(localStorage.getItem("ns_custom_agents")||"[]");}catch{return[];}});
+  const [agentBuilderOpen,setAgentBuilderOpen]=useState(false);
+  const [newAgent,   setNewAgent]  = useState({name:"",i:"🤖",c:"#00ffe7",sys:""});
   const abortRef=useRef(false);
   const agTimerRef=useRef({});
 
+  useEffect(()=>{localStorage.setItem("ns_custom_agents",JSON.stringify(customAgents));},[customAgents]);
+  useEffect(()=>{localStorage.setItem("ns_webhook",webhookUrl);},[webhookUrl]);
+
+  const effectiveAgents=({...AGENTS,...Object.fromEntries(customAgents.map(a=>[a.name,{c:a.c,i:a.i,sys:a.sys}]))});
+
   const isGated=plan==="free"&&runCount>=FREE_LIMIT;
   const jwt=session?.access_token||sbKey;
-  const cA={_key:apiKey,_proxy:proxyUrl,_jwt:jwt,_model:model};
+  const cA={_key:apiKey,_proxy:proxyUrl,_jwt:jwt,_model:model,_geminiKey:geminiKey};
   const phaseColor={idle:T.dim,orchestrating:T.yellow,running:T.cyan,overseeing:T.purple,done:T.green};
   const branches=["all",...new Set(["main",...runs.map(r=>r.branch||"main")])];
   const addLog=m=>setLogs(p=>[...p.slice(-60),`${new Date().toLocaleTimeString()} — ${m}`]);
@@ -704,15 +755,6 @@ export default function App() {
     }
   },[]);
 
-  useEffect(()=>{
-    if(Notification.permission==="default")Notification.requestPermission();
-    const h=e=>{
-      if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();if(!running&&goal.trim()&&(apiKey||proxyUrl))handleRun();}
-      if(e.key==="Escape"&&running){abortRef.current=true;setRunning(false);setPhase("idle");}
-    };
-    window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);
-  },[running,goal,apiKey,proxyUrl,handleRun]);
-
   const loadRuns=useCallback(async()=>{
     if(!sbUrl||!sbKey)return;
     setRunsLoading(true);
@@ -720,23 +762,6 @@ export default function App() {
     catch(e){addLog("Load error: "+e.message);}
     setRunsLoading(false);
   },[sbUrl,sbKey]);
-
-  const loadDbTpls=useCallback(async()=>{
-    if(!sbUrl||!sbKey)return;
-    try{const rows=await mkDb(sbUrl,sbKey).sel("templates","select=*&is_public=eq.true&order=usage_count.desc&limit=40");setDbTpls(rows);}
-    catch{}
-  },[sbUrl,sbKey]);
-
-  useEffect(()=>{
-    if(tab==="history"||tab==="dashboard")loadRuns();
-    if(tab==="templates")loadDbTpls();
-  },[tab,loadRuns,loadDbTpls]);
-
-  const handleForge=useCallback(async()=>{
-    if(!proxyUrl&&!apiKey)return alert("Enter API key or proxy URL in ⚙ Settings.");
-    setPfBusy(true);setPfOut("");
-    await streamClaude({system:`You are a ${pfP}. Respond in ${pfT} tone. Constraint: ${pfC}. Transform or generate the user's prompt. Output ONLY the reforged prompt.`,messages:[{role:"user",content:pfRaw.trim()||"Generate a powerful software goal."}],onToken:t=>setPfOut(o=>o+t),onDone:()=>setPfBusy(false),onErr:e=>{setPfOut("ERROR: "+e);setPfBusy(false);},...cA});
-  },[apiKey,proxyUrl,pfP,pfT,pfC,pfRaw,jwt]);
 
   const saveRun=useCallback(async(outputs,ovText,tokens)=>{
     if(!sbUrl||!sbKey){setSbStatus("nosupa");return;}
@@ -749,24 +774,8 @@ export default function App() {
     }catch(e){setSbStatus("error");addLog("Save error: "+e.message);}
   },[sbUrl,sbKey,goal,branch,commitMsg,runs,session]);
 
-  const exportMarkdown=useCallback(()=>{
-    const lines=[`# Neural Swarm Run\n**Goal:** ${goal}\n**Branch:** ${branch}\n**Date:** ${new Date().toLocaleString()}\n`];
-    Object.entries(agOut).forEach(([name,out])=>{
-      lines.push(`## ${AGENTS[name]?.i||""} ${name}\n\`\`\`\n${out.text}\n\`\`\`\n`);
-    });
-    if(overseer)lines.push(`## ◈ OVERSEER\n${overseer}\n`);
-    const blob=new Blob([lines.join("\n")],{type:"text/markdown"});
-    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`swarm-${Date.now()}.md`;a.click();
-  },[goal,branch,agOut,overseer]);
-
-  const copyAll=useCallback(()=>{
-    const parts=Object.entries(agOut).map(([name,out])=>`=== ${name} ===\n${out.text}`);
-    if(overseer)parts.push(`=== OVERSEER ===\n${overseer}`);
-    navigator.clipboard?.writeText(parts.join("\n\n"));
-  },[agOut,overseer]);
-
   const handleRun=useCallback(async()=>{
-    if(!proxyUrl&&!apiKey)return alert("Enter API key or proxy URL in ⚙ Settings.");
+    if(isGemini(model)?!geminiKey:(!proxyUrl&&!apiKey))return alert(isGemini(model)?"Enter Gemini API key in ⚙ Settings.":"Enter API key or proxy URL in ⚙ Settings.");
     if(!goal.trim())return alert("Enter a goal.");
     if(isGated){setShowUpg(true);return;}
     abortRef.current=false;setRunning(true);setPhase("orchestrating");
@@ -776,19 +785,19 @@ export default function App() {
     addLog(`Model: ${model}${parallel?" · parallel":""}`);
     let plan_;
     try{
-      const raw=await callClaude({system:`You are an orchestrator for a multi-agent AI system. Available: ${Object.keys(AGENTS).join(", ")}. Pick 2-5 agents for the user's goal in execution order. Write specific instructions per agent. Respond ONLY as valid JSON: {"agents":[{"name":"AGENT_NAME","instruction":"..."}]}`,messages:[{role:"user",content:goal}],...cA});
+      const raw=await callClaude({system:`You are an orchestrator for a multi-agent AI system. Available: ${Object.keys(effectiveAgents).join(", ")}. Pick 2-5 agents for the user's goal in execution order. Write specific instructions per agent. Respond ONLY as valid JSON: {"agents":[{"name":"AGENT_NAME","instruction":"..."}]}`,messages:[{role:"user",content:goal}],...cA});
       plan_=JSON.parse(raw.replace(/```json|```/g,"").trim());
       addLog("Plan: "+plan_.agents.map(a=>a.name).join(parallel?" ∥ ":" → "));
     }catch(e){addLog("Orchestrator error: "+e.message);setPhase("idle");setRunning(false);return;}
     setPhase("running");
     const ctx=[],finals={};let totalTok=0;
     const maxTok=customMaxTok||PLAN_TOKENS[plan]||PLAN_TOKENS.free;
-    const steps=plan_.agents.filter(s=>AGENTS[s.name]);
+    const steps=plan_.agents.filter(s=>effectiveAgents[s.name]);
     const total=steps.length;
 
     const runStep=async(step,ctxBlock,idx)=>{
       if(abortRef.current)return;
-      const ag=AGENTS[step.name];
+      const ag=effectiveAgents[step.name];
       addLog(`[${step.name}] starting...`);
       setAgOut(p=>({...p,[step.name]:{text:"",status:"running"}}));
       agTimerRef.current[step.name]=Date.now();
@@ -815,7 +824,14 @@ export default function App() {
     } else {
       for(let i=0;i<steps.length;i++){
         if(abortRef.current)break;
-        const ctxBlock=ctx.length>=2?await compressCtx(ctx,goal,cA._key,cA._proxy,cA._jwt):ctx.length?`\n\nPREVIOUS OUTPUTS:\n${ctx.map(c=>`[${c.agent}]: ${c.output.slice(0,500)}`).join("\n\n")}` :"";
+        let ctxBlock="";
+        if(chainMode&&ctx.length){
+          ctxBlock=`\n\n--- PRIOR AGENT OUTPUTS (build on these) ---\n${ctx.map(c=>`[${c.agent}]:\n${c.output}`).join("\n\n---\n")}`;
+        } else if(ctx.length>=2){
+          ctxBlock=await compressCtx(ctx,goal,cA._key,cA._proxy,cA._jwt,cA._model,cA._geminiKey);
+        } else if(ctx.length){
+          ctxBlock=`\n\nPREVIOUS OUTPUTS:\n${ctx.map(c=>`[${c.agent}]: ${c.output.slice(0,500)}`).join("\n\n")}`;
+        }
         await runStep(steps[i],ctxBlock,i);
       }
     }
@@ -833,6 +849,67 @@ export default function App() {
       onErr:e=>{setOverseer("ERROR: "+e);setPhase("done");setRunning(false);},
       ...cA,_maxTok:maxTok});
   },[apiKey,proxyUrl,goal,plan,isGated,jwt,saveRun,loadRuns,model,parallel,customMaxTok]);
+
+  useEffect(()=>{
+    if(Notification.permission==="default")Notification.requestPermission();
+    const h=e=>{
+      if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();if(!running&&goal.trim()&&(apiKey||proxyUrl))handleRun();}
+      if(e.key==="Escape"&&running){abortRef.current=true;setRunning(false);setPhase("idle");}
+    };
+    window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);
+  },[running,goal,apiKey,proxyUrl,handleRun]);
+
+  const loadDbTpls=useCallback(async()=>{
+    if(!sbUrl||!sbKey)return;
+    try{const rows=await mkDb(sbUrl,sbKey).sel("templates","select=*&is_public=eq.true&order=usage_count.desc&limit=40");setDbTpls(rows);}
+    catch{}
+  },[sbUrl,sbKey]);
+
+  useEffect(()=>{
+    if(tab==="history"||tab==="dashboard")loadRuns();
+    if(tab==="templates")loadDbTpls();
+  },[tab,loadRuns,loadDbTpls]);
+
+  const handleForge=useCallback(async()=>{
+    if(isGemini(model)?!geminiKey:(!proxyUrl&&!apiKey))return alert(isGemini(model)?"Enter Gemini API key in ⚙ Settings.":"Enter API key or proxy URL in ⚙ Settings.");
+    setPfBusy(true);setPfOut("");
+    await streamClaude({system:`You are a ${pfP}. Respond in ${pfT} tone. Constraint: ${pfC}. Transform or generate the user's prompt. Output ONLY the reforged prompt.`,messages:[{role:"user",content:pfRaw.trim()||"Generate a powerful software goal."}],onToken:t=>setPfOut(o=>o+t),onDone:()=>setPfBusy(false),onErr:e=>{setPfOut("ERROR: "+e);setPfBusy(false);},...cA});
+  },[apiKey,proxyUrl,pfP,pfT,pfC,pfRaw,jwt]);
+
+  const exportMarkdown=useCallback(()=>{
+    const lines=[`# Neural Swarm Run\n**Goal:** ${goal}\n**Branch:** ${branch}\n**Date:** ${new Date().toLocaleString()}\n`];
+    Object.entries(agOut).forEach(([name,out])=>{
+      lines.push(`## ${AGENTS[name]?.i||""} ${name}\n\`\`\`\n${out.text}\n\`\`\`\n`);
+    });
+    if(overseer)lines.push(`## ◈ OVERSEER\n${overseer}\n`);
+    const blob=new Blob([lines.join("\n")],{type:"text/markdown"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`swarm-${Date.now()}.md`;a.click();
+  },[goal,branch,agOut,overseer]);
+
+  const copyAll=useCallback(()=>{
+    const parts=Object.entries(agOut).map(([name,out])=>`=== ${name} ===\n${out.text}`);
+    if(overseer)parts.push(`=== OVERSEER ===\n${overseer}`);
+    navigator.clipboard?.writeText(parts.join("\n\n"));
+  },[agOut,overseer]);
+
+  const exportGist=useCallback(async()=>{
+    const md=[`# Neural Swarm Run\n**Goal:** ${goal}\n**Branch:** ${branch}\n**Date:** ${new Date().toLocaleString()}\n`,...Object.entries(agOut).map(([n,o])=>`## ${effectiveAgents[n]?.i||"⬡"} ${n}\n\`\`\`\n${o.text}\n\`\`\``),...(overseer?[`## ◈ OVERSEER\n${overseer}`]:[])].join("\n");
+    try{
+      const res=await fetch("https://api.github.com/gists",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({public:true,description:`Neural Swarm: ${goal.slice(0,80)}`,files:{"swarm-run.md":{content:md}}})});
+      const d=await res.json();
+      if(d.html_url)window.open(d.html_url,"_blank");
+      else throw new Error(d.message||"No URL returned");
+    }catch(e){alert("Gist error: "+e.message);}
+  },[goal,branch,agOut,overseer,effectiveAgents]);
+
+  const sendWebhook=useCallback(async()=>{
+    if(!webhookUrl)return alert("Set Webhook URL in ⚙ Settings first.");
+    try{
+      const res=await fetch(webhookUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({goal,branch,agents:Object.fromEntries(Object.entries(agOut).map(([k,v])=>[k,v.text])),overseer,cost:runCost,timestamp:new Date().toISOString()})});
+      if(res.ok)addLog("Webhook sent ✓");
+      else throw new Error(`HTTP ${res.status}`);
+    }catch(e){addLog("Webhook error: "+e.message);alert("Webhook error: "+e.message);}
+  },[webhookUrl,goal,branch,agOut,overseer,runCost,addLog]);
 
   const retryAgent=useCallback(async(name)=>{
     const ag=AGENTS[name];if(!ag||!goal.trim()||(!(proxyUrl||apiKey)))return;
@@ -927,7 +1004,7 @@ export default function App() {
       {/* SETTINGS */}
       {settings&&(
         <div style={{background:T.bg3,borderBottom:`1px solid ${T.border}`,padding:"10px 14px",display:"flex",gap:"10px",flexWrap:"wrap",alignItems:"flex-end"}}>
-          {[["Anthropic Key",apiKey,setApiKey,showKey,setShowKey,"sk-ant-..."],["Proxy URL",proxyUrl,setProxyUrl,false,null,"https://xyz.supabase.co/functions/v1/swarm-proxy"],["Supabase URL",sbUrl,setSbUrl,false,null,"https://xyz.supabase.co"],["Supabase Key",sbKey,setSbKey,showSbKey,setShowSbKey,"eyJ..."]].map(([label,val,setter,show,setShow,ph])=>(
+          {[["Anthropic Key",apiKey,setApiKey,showKey,setShowKey,"sk-ant-..."],["Gemini Key",geminiKey,setGeminiKey,showGeminiKey,setShowGeminiKey,"AIza..."],["Proxy URL",proxyUrl,setProxyUrl,false,null,"https://xyz.supabase.co/functions/v1/swarm-proxy"],["Supabase URL",sbUrl,setSbUrl,false,null,"https://xyz.supabase.co"],["Supabase Key",sbKey,setSbKey,showSbKey,setShowSbKey,"eyJ..."],["Webhook URL",webhookUrl,setWebhookUrl,false,null,"https://hooks.example.com/swarm"]].map(([label,val,setter,show,setShow,ph])=>(
             <div key={label} style={{flex:"0 0 195px"}}>
               <div style={lbl}>{label}</div>
               <div style={{position:"relative"}}>
@@ -992,11 +1069,14 @@ export default function App() {
                   {isGated?"↑ UPGRADE":running?"RUNNING...":"▶ DISPATCH"}
                 </button>
                 <button title={parallel?"Sequential mode":"Parallel mode"} style={{...Btn(parallel?T.yellow:T.dim),padding:"8px 10px",fontSize:"10px"}} onClick={()=>setParallel(p=>!p)}>{parallel?"∥":"→"}</button>
+                {!parallel&&<button title={chainMode?"Chain mode ON — agents build on each other":"Chain mode OFF — agents run independently"} style={{...Btn(chainMode?T.pink:T.dim),padding:"8px 10px",fontSize:"10px"}} onClick={()=>setChainMode(p=>!p)}>⛓</button>}
                 {running&&<button style={Btn(T.orange)} onClick={()=>{abortRef.current=true;setRunning(false);setPhase("idle");}}>ABORT</button>}
                 {phase==="done"&&<button style={Btn(T.dim)} onClick={()=>{setAgOut({});setOverseer("");setLogs([]);setPhase("idle");setSbStatus("");setRunCost(0);setRunProgress(0);}}>RESET</button>}
                 {phase==="done"&&<button style={{...Btn(T.pink),padding:"8px 10px",fontSize:"10px"}} onClick={()=>setSaveOpen(true)}>+TPL</button>}
                 {phase==="done"&&<button style={{...Btn(T.cyan),padding:"8px 10px",fontSize:"10px"}} onClick={copyAll} title="Copy all outputs">⎘</button>}
                 {phase==="done"&&<button style={{...Btn("#3ecf8e"),padding:"8px 10px",fontSize:"10px"}} onClick={exportMarkdown} title="Export as Markdown">↓MD</button>}
+                {phase==="done"&&<button style={{...Btn("#9b8eaf"),padding:"8px 10px",fontSize:"10px"}} onClick={exportGist} title="Share as GitHub Gist">⬆GIST</button>}
+                {phase==="done"&&webhookUrl&&<button style={{...Btn(T.yellow),padding:"8px 10px",fontSize:"10px"}} onClick={sendWebhook} title="Send to webhook">→HOOK</button>}
               </div>
               {running&&runProgress>0&&(
                 <div style={{marginTop:"8px"}}>
@@ -1009,17 +1089,44 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <div style={sec}>Agents</div>
-              {Object.entries(AGENTS).map(([name,ag])=>{
+              <div style={{...sec,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span>Agents</span>
+                <button onClick={()=>setAgentBuilderOpen(p=>!p)} title="Build a custom agent" style={{...Btn(agentBuilderOpen?T.green:T.dim),padding:"2px 7px",fontSize:"10px"}}>⊕</button>
+              </div>
+              {Object.entries(effectiveAgents).map(([name,ag])=>{
                 const out=agOut[name];
+                const isCustom=customAgents.some(a=>a.name===name);
                 return (
                   <div key={name} style={{display:"flex",alignItems:"center",gap:"5px",padding:"3px 0",borderBottom:"1px solid #0f1520"}}>
                     <span style={Dot(out?.status||"idle")}/>
                     <span style={{color:ag.c,fontSize:"10px",flex:1}}>{ag.i} {name}</span>
                     <span style={{color:T.dim,fontSize:"10px"}}>{out?.status||"—"}</span>
+                    {isCustom&&<button onClick={()=>setCustomAgents(p=>p.filter(a=>a.name!==name))} style={{background:"none",border:"none",color:T.dim,cursor:"pointer",fontSize:"10px",padding:"0 2px"}} title="Remove custom agent">✕</button>}
                   </div>
                 );
               })}
+              {agentBuilderOpen&&(
+                <div style={{border:`1px solid ${T.green}55`,background:"#090f0a",padding:"10px",marginTop:"6px"}}>
+                  <div style={{color:T.green,fontSize:"10px",letterSpacing:"2px",marginBottom:"8px"}}>⊕ CUSTOM AGENT</div>
+                  <input style={{...bi,marginBottom:"5px",fontSize:"11px"}} placeholder="Name e.g. LEGAL_REVIEWER" value={newAgent.name} onChange={e=>setNewAgent(p=>({...p,name:e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g,"_")}))}/>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"5px",marginBottom:"5px"}}>
+                    <input style={{...bi,padding:"5px 8px",fontSize:"13px"}} placeholder="Icon 🤖" value={newAgent.i} onChange={e=>setNewAgent(p=>({...p,i:e.target.value.slice(-2)||"⬡"}))}/>
+                    <input style={{...bi,padding:"5px 8px"}} type="color" value={newAgent.c} onChange={e=>setNewAgent(p=>({...p,c:e.target.value}))} title="Agent color"/>
+                  </div>
+                  <textarea style={{...bi,resize:"vertical",minHeight:"60px",marginBottom:"6px",fontSize:"11px"}} placeholder="System prompt: describe the agent's role and expertise..." value={newAgent.sys} onChange={e=>setNewAgent(p=>({...p,sys:e.target.value}))}/>
+                  <div style={{display:"flex",gap:"5px"}}>
+                    <button style={{...Btn(T.green),flex:1,padding:"5px",fontSize:"10px"}} onClick={()=>{
+                      const n=newAgent.name.trim();
+                      if(!n||!newAgent.sys.trim())return alert("Name and system prompt are required.");
+                      if(effectiveAgents[n])return alert(`"${n}" already exists.`);
+                      setCustomAgents(p=>[...p,{...newAgent,name:n}]);
+                      setNewAgent({name:"",i:"🤖",c:"#00ffe7",sys:""});
+                      setAgentBuilderOpen(false);
+                    }}>SAVE</button>
+                    <button style={{...Btn(T.dim),padding:"5px 9px",fontSize:"10px"}} onClick={()=>setAgentBuilderOpen(false)}>✕</button>
+                  </div>
+                </div>
+              )}
               {logs.length>0&&(<><div style={sec}>Log</div><div style={{maxHeight:"80px",overflowY:"auto"}}>{logs.map((l,i)=><div key={i} style={{color:T.dim,fontSize:"10px",fontStyle:"italic"}}>{l}</div>)}</div></>)}
             </div>
             <div>
@@ -1031,7 +1138,7 @@ export default function App() {
                   {sbUrl&&sbKey&&<div style={{color:"#3ecf8e",fontSize:"10px",marginTop:"8px"}}>⚡ Supabase connected</div>}
                 </div>
               )}
-              {Object.keys(agOut).map(name=><AgentCard key={name} name={name} out={agOut[name]} onRetry={retryAgent}/>)}
+              {Object.keys(agOut).map(name=><AgentCard key={name} name={name} out={agOut[name]} onRetry={retryAgent} agDef={effectiveAgents[name]}/>)}
               {(overseer||phase==="overseeing")&&(
                 <div style={{border:`1px solid ${T.purple}`,background:"#0d0815",padding:"12px",marginTop:"8px",boxShadow:`0 0 12px ${T.purple}22`}}>
                   <div style={{color:T.purple,fontSize:"11px",letterSpacing:"3px",marginBottom:"8px"}}>◈ OVERSEER EVALUATION</div>
