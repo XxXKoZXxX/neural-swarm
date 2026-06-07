@@ -7,9 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "sentinel": "node sentinel.js",
+    "sentinel:dry": "node sentinel.js --dry-run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.95.1",
+    "@octokit/rest": "^22.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
