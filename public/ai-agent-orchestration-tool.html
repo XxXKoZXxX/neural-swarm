@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Agent Orchestration Tool – Neural Swarm</title>
+  <meta name="description" content="Neural Swarm is the AI agent orchestration tool that runs 10 specialized Claude agents in sequence. Production-ready code, root-cause fixes, and scored output on every run.">
+  <link rel="canonical" href="https://neural-swarm.vercel.app/ai-agent-orchestration-tool">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0a;color:#e8e8e8;line-height:1.6}
+    .container{max-width:860px;margin:0 auto;padding:40px 24px}
+    h1{font-size:2.2rem;font-weight:700;line-height:1.2;margin-bottom:16px;color:#fff}
+    h2{font-size:1.4rem;font-weight:600;margin:40px 0 16px;color:#fff}
+    p{margin-bottom:16px;color:#ccc}
+    .cta{display:inline-block;margin:8px 8px 8px 0;padding:12px 24px;background:#6366f1;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;font-size:0.95rem}
+    .cta.secondary{background:transparent;border:1px solid #6366f1;color:#818cf8}
+    table{width:100%;border-collapse:collapse;margin:16px 0}
+    th,td{text-align:left;padding:10px 12px;border-bottom:1px solid #222;font-size:0.9rem}
+    th{color:#888;font-weight:500}
+    ul{padding-left:20px;margin-bottom:16px}
+    li{margin-bottom:8px;color:#ccc}
+    .nav{padding:16px 24px;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;gap:16px}
+    .nav a{color:#888;text-decoration:none;font-size:0.9rem}
+    .nav a:hover{color:#fff}
+    .nav .logo{color:#fff;font-weight:700;font-size:1.1rem;margin-right:auto}
+    .hero{padding:64px 0 40px}
+    .badge{display:inline-block;padding:4px 10px;background:#1a1a2e;color:#818cf8;border-radius:4px;font-size:0.8rem;margin-bottom:16px;border:1px solid #2a2a4e}
+    footer{margin-top:80px;padding:32px 0;border-top:1px solid #1a1a1a;text-align:center;color:#555;font-size:0.85rem}
+    footer a{color:#666;text-decoration:none}
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <span class="logo">&#x2B21; Neural Swarm</span>
+  <a href="/">Home</a>
+  <a href="/claude-multi-agent-tool">Claude Agents</a>
+  <a href="https://neural-swarm.vercel.app" class="cta" style="padding:6px 14px;font-size:0.85rem">Try Free</a>
+</nav>
+<div class="container">
+  <div class="hero">
+    <span class="badge">AI Agent Orchestration</span>
+    <h1>The AI Agent Orchestration Tool That Actually Delivers</h1>
+    <p>Most AI tools give you one model answering one question. Neural Swarm runs a coordinated pipeline of 10 specialized agents, each with a defined role, each building on the last.</p>
+    <p><strong>The result:</strong> production-ready code, not a first draft. Root-cause diagnoses, not guesses. Scored, versioned output on every run.</p>
+    <a href="https://neural-swarm.vercel.app" class="cta">Start Free — 5 runs/month</a>
+    <a href="https://neural-swarm.vercel.app" class="cta secondary">See Live Demo</a>
+  </div>
+  <h2>Why Orchestration Beats Single-Model Chat</h2>
+  <table>
+    <tr><th>Single-Model Chat</th><th>Neural Swarm</th></tr>
+    <tr><td>One model wears every hat</td><td>Each agent has one job, done well</td></tr>
+    <tr><td>No history between sessions</td><td>Every run versioned like a git commit</td></tr>
+    <tr><td>You guess if output is good</td><td>Overseer scores every run /10</td></tr>
+    <tr><td>No workflow structure</td><td>Orchestrator plans agent selection per goal</td></tr>
+    <tr><td>Context degrades on long tasks</td><td>Context compressor preserves key decisions</td></tr>
+  </table>
+  <h2>The 10 Agents</h2>
+  <table>
+    <tr><th>Agent</th><th>Role</th></tr>
+    <tr><td>ARCHITECT</td><td>System design, schemas, technical decisions</td></tr>
+    <tr><td>CODER</td><td>Complete, runnable, production-ready code</td></tr>
+    <tr><td>DEBUGGER</td><td>Root-cause analysis, fully fixed output</td></tr>
+    <tr><td>TESTER</td><td>Full test suites with edge cases and assertions</td></tr>
+    <tr><td>ANALYST</td><td>Scores work /10, prioritized improvement plan</td></tr>
+    <tr><td>REFACTORER</td><td>DRY, clean naming, design patterns</td></tr>
+    <tr><td>RESEARCHER</td><td>Deep technical research with tradeoffs</td></tr>
+    <tr><td>WRITER</td><td>READMEs, docs, reports — any tone, any audience</td></tr>
+    <tr><td>REVIEWER</td><td>Principal-engineer review: CRITICAL / MAJOR / MINOR / NIT</td></tr>
+    <tr><td>DESIGNER</td><td>UI/UX: layout, palette, typography, components, UX flows</td></tr>
+  </table>
+  <h2>What You Can Build</h2>
+  <ul>
+    <li><strong>Full App Builder</strong> — ARCHITECT designs, CODER builds, TESTER verifies, REVIEWER audits</li>
+    <li><strong>Bug Eliminator</strong> — paste a GitHub URL, DEBUGGER finds root cause and outputs the fix</li>
+    <li><strong>Code Review Pro</strong> — REVIEWER rates every issue with severity levels</li>
+    <li><strong>Research Brief</strong> — RESEARCHER pulls depth, WRITER formats for any audience</li>
+    <li><strong>Design System</strong> — DESIGNER outputs layout, palette, typography, components, UX flows</li>
+  </ul>
+  <h2>Pricing</h2>
+  <table>
+    <tr><th>Plan</th><th>Price</th><th>Runs</th><th>Agents</th></tr>
+    <tr><td>FREE</td><td>$0/mo</td><td>5/month</td><td>3/run</td></tr>
+    <tr><td>PRO</td><td>$29/mo</td><td>Unlimited</td><td>All 10</td></tr>
+    <tr><td>POWER</td><td>$79/mo</td><td>Unlimited</td><td>All 10 + team</td></tr>
+  </table>
+  <a href="https://neural-swarm.vercel.app" class="cta">Get Started Free</a>
+</div>
+<footer>
+  <a href="/">Neural Swarm</a> &middot; <a href="/claude-multi-agent-tool">Claude Multi-Agent Tool</a> &middot; <a href="https://neural-swarm.vercel.app">App</a>
+</footer>
+</body>
+</html>
