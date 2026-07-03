@@ -1,0 +1,45 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/claude/neural-swarm-claude-kit/.claude/hooks/pre-bash-safety.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/claude/neural-swarm-claude-kit/.claude/hooks/pre-write-secret-check.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/claude/neural-swarm-claude-kit/.claude/hooks/post-write-typecheck.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/claude/neural-swarm-claude-kit/.claude/hooks/stop-summary.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
