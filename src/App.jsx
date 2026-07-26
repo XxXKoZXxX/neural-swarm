@@ -248,7 +248,7 @@ function TplCard({t,onUse,onFork,canUse}) {
   );
 }
 
-function PublishModal({goal,tplName,setTplName,tplDesc,setTplDesc,tplCat,setTplCat,tplPrice,setTplPrice,tplTags,setTplTags,onPublish,onClose}) {
+function PublishModal({tplName,setTplName,tplDesc,setTplDesc,tplCat,setTplCat,tplPrice,setTplPrice,tplTags,setTplTags,onPublish,onClose}) {
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(9,11,16,.92)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100}}>
       <div style={{width:"380px",border:`1px solid ${T.pink}`,background:T.bg2,padding:"22px",boxShadow:`0 0 30px ${T.pink}22`}}>
@@ -715,7 +715,7 @@ export default function App() {
   const [parallel,   setParallel]  = useState(false);
   const [chainMode,  setChainMode] = useState(false);
   const [histSearch, setHistSearch]= useState("");
-  const [agTimes,    setAgTimes]   = useState({});
+  const [_agTimes,    setAgTimes]   = useState({});
   const [runProgress,setRunProgress]=useState(0);
   const [customMaxTok,setCustomMaxTok]=useState(0);
   const [webhookUrl, setWebhookUrl] = useState(()=>localStorage.getItem("ns_webhook")||"");
@@ -843,7 +843,7 @@ export default function App() {
       onDone:async()=>{
         setRunProgress(100);addLog("Complete. ~"+totalTok+" tokens total");setPhase("done");setRunning(false);setRunCount(c=>c+1);
         if(Notification.permission==="granted")new Notification("⬡ Swarm Complete",{body:goal.slice(0,80),icon:"/icon.svg"});
-        try{const saved=JSON.parse(localStorage.getItem("ns_runs")||"[]");localStorage.setItem("ns_runs",JSON.stringify([{id:"l"+Date.now(),goal,branch,agents:finals,overseer:ov,created_at:new Date().toISOString()},...saved].slice(0,20)));}catch{}
+        try{const saved=JSON.parse(localStorage.getItem("ns_runs")||"[]");localStorage.setItem("ns_runs",JSON.stringify([{id:"l"+Date.now(),goal,branch,agents:finals,overseer:ov,created_at:new Date().toISOString()},...saved].slice(0,20)));}catch{ /* ignore storage errors */ }
         await saveRun(finals,ov,totalTok);await loadRuns();
       },
       onErr:e=>{setOverseer("ERROR: "+e);setPhase("done");setRunning(false);},
@@ -915,10 +915,10 @@ export default function App() {
     const ag=AGENTS[name];if(!ag||!goal.trim()||(!(proxyUrl||apiKey)))return;
     setAgOut(p=>({...p,[name]:{text:"",status:"running"}}));
     agTimerRef.current[name]=Date.now();
-    let full="",tokCount=0;
+    let _full="",tokCount=0;
     const maxTok=customMaxTok||PLAN_TOKENS[plan]||PLAN_TOKENS.free;
     await streamClaude({system:ag.sys,messages:[{role:"user",content:`GOAL: ${goal}\n\nTASK: Retry and complete your task for this goal.`}],
-      onToken:t=>{full+=t;tokCount++;setAgOut(p=>({...p,[name]:{text:(p[name]?.text||"")+t,status:"running"}}));},
+      onToken:t=>{_full+=t;tokCount++;setAgOut(p=>({...p,[name]:{text:(p[name]?.text||"")+t,status:"running"}}));},
       onDone:()=>{const el=((Date.now()-agTimerRef.current[name])/1000).toFixed(1);setAgOut(p=>({...p,[name]:{...p[name],status:"done",elapsed:el}}));addLog(`[${name}] retried in ${el}s ~${tokCount} tok`);},
       onErr:e=>{setAgOut(p=>({...p,[name]:{text:"ERROR: "+e,status:"error"}}));},
       ...cA,_maxTok:maxTok});
