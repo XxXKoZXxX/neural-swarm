@@ -63,7 +63,7 @@ async function streamGemini({messages,system,onToken,onDone,onErr,_geminiKey="",
       for(const l of lines){
         if(!l.startsWith("data:"))continue;
         const raw=l.slice(5).trim();if(raw==="[DONE]")continue;
-        try{const ev=JSON.parse(raw);const t=ev.candidates?.[0]?.content?.parts?.[0]?.text;if(t)onToken(t);}catch{}
+        try{const ev=JSON.parse(raw);const t=ev.candidates?.[0]?.content?.parts?.[0]?.text;if(t)onToken(t);}catch{ /* ignore parse errors */ }
       }
     }
     onDone();
@@ -98,7 +98,7 @@ async function streamClaude({messages,system,onToken,onDone,onErr,_key="",_proxy
       for(const l of lines) {
         if(!l.startsWith("data:"))continue;
         const raw=l.slice(5).trim();if(raw==="[DONE]")continue;
-        try{const ev=JSON.parse(raw);if(ev.type==="content_block_delta"&&ev.delta?.type==="text_delta")onToken(ev.delta.text);}catch{}
+        try{const ev=JSON.parse(raw);if(ev.type==="content_block_delta"&&ev.delta?.type==="text_delta")onToken(ev.delta.text);}catch{ /* ignore parse errors */ }
       }
     }
     onDone();
@@ -862,7 +862,7 @@ export default function App() {
   const loadDbTpls=useCallback(async()=>{
     if(!sbUrl||!sbKey)return;
     try{const rows=await mkDb(sbUrl,sbKey).sel("templates","select=*&is_public=eq.true&order=usage_count.desc&limit=40");setDbTpls(rows);}
-    catch{}
+    catch{ /* ignore load errors */ }
   },[sbUrl,sbKey]);
 
   useEffect(()=>{
