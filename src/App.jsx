@@ -755,7 +755,7 @@ export default function App() {
       addLog(`Upgraded to ${newPlan.toUpperCase()} ✓`);
       window.history.replaceState({},"",window.location.pathname);
     }
-  },[]);
+    },[addLog]);
 
   const loadRuns=useCallback(async()=>{
     if(!sbUrl||!sbKey)return;
@@ -763,7 +763,7 @@ export default function App() {
     try{const rows=await mkDb(sbUrl,sbKey).sel("agent_runs","select=*&order=created_at.desc&limit=40");setRuns(rows);addLog(`Loaded ${rows.length} runs.`);}
     catch(e){addLog("Load error: "+e.message);}
     setRunsLoading(false);
-  },[sbUrl,sbKey]);
+  },[sbUrl,sbKey,addLog]);
 
   const saveRun=useCallback(async(outputs,ovText,tokens)=>{
     if(!sbUrl||!sbKey){setSbStatus("nosupa");return;}
@@ -774,7 +774,7 @@ export default function App() {
       await mkDb(sbUrl,sbKey).ins("agent_runs",{goal,branch,version_num:verNum,run_message:commitMsg||`v${verNum}`,agents:Object.fromEntries(Object.entries(outputs).map(([k,v])=>[k,{text:v.text,status:v.status}])),overseer:ovText,score:score?score+"/10":null,tokens_used:tokens,cost:(tokens*COST_PER_TOK).toFixed(6),user_email:session?.email||null,is_template:false});
       setSbStatus("saved");addLog("Saved ✓");
     }catch(e){setSbStatus("error");addLog("Save error: "+e.message);}
-  },[sbUrl,sbKey,goal,branch,commitMsg,runs,session]);
+  },[sbUrl,sbKey,goal,branch,commitMsg,runs,session,addLog]);
 
   const handleRun=useCallback(async()=>{
     if(isGemini(model)?!geminiKey:(!proxyUrl&&!apiKey))return alert(isGemini(model)?"Enter Gemini API key in ⚙ Settings.":"Enter API key or proxy URL in ⚙ Settings.");
@@ -850,7 +850,7 @@ export default function App() {
       },
       onErr:e=>{setOverseer("ERROR: "+e);setPhase("done");setRunning(false);},
       ...cA,_maxTok:maxTok});
-      },[apiKey,proxyUrl,goal,plan,isGated,jwt,saveRun,loadRuns,model,parallel,customMaxTok,branch,cA,chainMode,effectiveAgents,geminiKey]);
+  },[apiKey,proxyUrl,goal,plan,isGated,jwt,saveRun,loadRuns,model,parallel,customMaxTok,branch,cA,chainMode,effectiveAgents,geminiKey,addLog]);
 
   useEffect(()=>{
     if(Notification.permission==="default")Notification.requestPermission();
@@ -877,7 +877,7 @@ export default function App() {
     if(isGemini(model)?!geminiKey:(!proxyUrl&&!apiKey))return alert(isGemini(model)?"Enter Gemini API key in ⚙ Settings.":"Enter API key or proxy URL in ⚙ Settings.");
     setPfBusy(true);setPfOut("");
     await streamClaude({system:`You are a ${pfP}. Respond in ${pfT} tone. Constraint: ${pfC}. Transform or generate the user's prompt. Output ONLY the reforged prompt.`,messages:[{role:"user",content:pfRaw.trim()||"Generate a powerful software goal."}],onToken:t=>setPfOut(o=>o+t),onDone:()=>setPfBusy(false),onErr:e=>{setPfOut("ERROR: "+e);setPfBusy(false);},...cA});
-  },[apiKey,proxyUrl,pfP,pfT,pfC,pfRaw,jwt,cA,geminiKey,model]);
+  },[apiKey,proxyUrl,pfP,pfT,pfC,pfRaw,cA,geminiKey,model]);
 
   const exportMarkdown=useCallback(()=>{
     const lines=[`# Neural Swarm Run\n**Goal:** ${goal}\n**Branch:** ${branch}\n**Date:** ${new Date().toLocaleString()}\n`];
@@ -925,7 +925,7 @@ export default function App() {
       onDone:()=>{const el=((Date.now()-agTimerRef.current[name])/1000).toFixed(1);setAgOut(p=>({...p,[name]:{...p[name],status:"done",elapsed:el}}));addLog(`[${name}] retried in ${el}s ~${tokCount} tok`);},
       onErr:e=>{setAgOut(p=>({...p,[name]:{text:"ERROR: "+e,status:"error"}}));},
       ...cA,_maxTok:maxTok});
-  },[goal,plan,proxyUrl,apiKey,jwt,model,customMaxTok,cA]);
+                        },[goal,plan,proxyUrl,apiKey,jwt,model,customMaxTok,cA,addLog]);
 
   const branchFrom=run=>{setGoal(run.goal||"");setBranch("branch-"+Date.now().toString(36));setCommitMsg("Branched from v"+(run.version_num||"?"));setTab("swarm");};
   const restoreRun=run=>{setGoal(run.goal||"");setBranch(run.branch||"main");setCommitMsg("Restored v"+(run.version_num||"?"));setTab("swarm");};
