@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 
 const AGENTS = {
   ARCHITECT:  { c:"#00ffe7", i:"⬡", sys:"You are a senior software architect. Design schemas, system breakdowns, and technical decisions. Be production-grade and concise." },
@@ -729,14 +729,14 @@ export default function App() {
   useEffect(()=>{localStorage.setItem("ns_custom_agents",JSON.stringify(customAgents));},[customAgents]);
   useEffect(()=>{localStorage.setItem("ns_webhook",webhookUrl);},[webhookUrl]);
 
-  const effectiveAgents=({...AGENTS,...Object.fromEntries(customAgents.map(a=>[a.name,{c:a.c,i:a.i,sys:a.sys}]))});
+  const effectiveAgents=useMemo(()=>({...AGENTS,...Object.fromEntries(customAgents.map(a=>[a.name,{c:a.c,i:a.i,sys:a.sys}]))}),[customAgents]);
 
   const isGated=plan==="free"&&runCount>=FREE_LIMIT;
   const jwt=session?.access_token||sbKey;
-  const cA={_key:apiKey,_proxy:proxyUrl,_jwt:jwt,_model:model,_geminiKey:geminiKey};
+  const cA=useMemo(()=>({_key:apiKey,_proxy:proxyUrl,_jwt:jwt,_model:model,_geminiKey:geminiKey}),[apiKey,proxyUrl,jwt,model,geminiKey]);
   const phaseColor={idle:T.dim,orchestrating:T.yellow,running:T.cyan,overseeing:T.purple,done:T.green};
   const branches=["all",...new Set(["main",...runs.map(r=>r.branch||"main")])];
-  const addLog=m=>setLogs(p=>[...p.slice(-60),`${new Date().toLocaleTimeString()} — ${m}`]);
+  const addLog=useCallback(m=>setLogs(p=>[...p.slice(-60),`${new Date().toLocaleTimeString()} — ${m}`]),[]);
 
   useEffect(()=>{
     const p=new URLSearchParams(window.location.search);
@@ -850,7 +850,7 @@ export default function App() {
       },
       onErr:e=>{setOverseer("ERROR: "+e);setPhase("done");setRunning(false);},
       ...cA,_maxTok:maxTok});
-  },[apiKey,proxyUrl,goal,plan,isGated,jwt,saveRun,loadRuns,model,parallel,customMaxTok]);
+      },[apiKey,proxyUrl,goal,plan,isGated,jwt,saveRun,loadRuns,model,parallel,customMaxTok,branch,cA,chainMode,effectiveAgents,geminiKey]);
 
   useEffect(()=>{
     if(Notification.permission==="default")Notification.requestPermission();
@@ -877,7 +877,7 @@ export default function App() {
     if(isGemini(model)?!geminiKey:(!proxyUrl&&!apiKey))return alert(isGemini(model)?"Enter Gemini API key in ⚙ Settings.":"Enter API key or proxy URL in ⚙ Settings.");
     setPfBusy(true);setPfOut("");
     await streamClaude({system:`You are a ${pfP}. Respond in ${pfT} tone. Constraint: ${pfC}. Transform or generate the user's prompt. Output ONLY the reforged prompt.`,messages:[{role:"user",content:pfRaw.trim()||"Generate a powerful software goal."}],onToken:t=>setPfOut(o=>o+t),onDone:()=>setPfBusy(false),onErr:e=>{setPfOut("ERROR: "+e);setPfBusy(false);},...cA});
-  },[apiKey,proxyUrl,pfP,pfT,pfC,pfRaw,jwt]);
+  },[apiKey,proxyUrl,pfP,pfT,pfC,pfRaw,jwt,cA,geminiKey,model]);
 
   const exportMarkdown=useCallback(()=>{
     const lines=[`# Neural Swarm Run\n**Goal:** ${goal}\n**Branch:** ${branch}\n**Date:** ${new Date().toLocaleString()}\n`];
@@ -925,7 +925,7 @@ export default function App() {
       onDone:()=>{const el=((Date.now()-agTimerRef.current[name])/1000).toFixed(1);setAgOut(p=>({...p,[name]:{...p[name],status:"done",elapsed:el}}));addLog(`[${name}] retried in ${el}s ~${tokCount} tok`);},
       onErr:e=>{setAgOut(p=>({...p,[name]:{text:"ERROR: "+e,status:"error"}}));},
       ...cA,_maxTok:maxTok});
-  },[goal,plan,proxyUrl,apiKey,jwt,model,customMaxTok]);
+  },[goal,plan,proxyUrl,apiKey,jwt,model,customMaxTok,cA]);
 
   const branchFrom=run=>{setGoal(run.goal||"");setBranch("branch-"+Date.now().toString(36));setCommitMsg("Branched from v"+(run.version_num||"?"));setTab("swarm");};
   const restoreRun=run=>{setGoal(run.goal||"");setBranch(run.branch||"main");setCommitMsg("Restored v"+(run.version_num||"?"));setTab("swarm");};
