@@ -291,6 +291,7 @@ function UpgradeModal({used,sbUrl,jwt,onClose,onPro}) {
       if(!ct.includes("json"))throw new Error(`stripe-checkout not deployed yet (HTTP ${res.status})`);
       const d=await res.json();
       if(d.error)throw new Error(d.error);
+// eslint-disable-next-line react-hooks/immutability -- redirect in click-triggered async handler, not during render
       if(d.url)window.location=d.url;
     }catch(e){alert(e.message);}
     setBusy(null);
@@ -741,6 +742,7 @@ export default function App() {
     const p=new URLSearchParams(window.location.search);
     if(p.get("purchase")==="success"){
       const tid=p.get("template");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time sync from URL redirect params on mount
       if(tid)setPurchased(prev=>new Set([...prev,tid]));
       addLog("Purchase confirmed ✓");
       window.history.replaceState({},"",window.location.pathname);
@@ -866,6 +868,7 @@ export default function App() {
   },[sbUrl,sbKey]);
 
   useEffect(()=>{
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on tab change, not synchronous render-phase update
     if(tab==="history"||tab==="dashboard")loadRuns();
     if(tab==="templates")loadDbTpls();
   },[tab,loadRuns,loadDbTpls]);
@@ -960,6 +963,7 @@ export default function App() {
   const maxU=Math.max(1,...Object.values(agUsage));
   const scores=runs.filter(r=>r.score).map(r=>parseInt(r.score));
   const avgScore=scores.length?(scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1):"—";
+  // eslint-disable-next-line react-hooks/purity -- intentional live recompute of "today" stat on each render
   const today=runs.filter(r=>new Date(r.created_at)>new Date(Date.now()-86400000)).length;
   const totalCost=runs.reduce((s,r)=>s+parseFloat(r.cost||0),0);
 
