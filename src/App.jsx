@@ -850,7 +850,7 @@ export default function App() {
       },
       onErr:e=>{setOverseer("ERROR: "+e);setPhase("done");setRunning(false);},
       ...cA,_maxTok:maxTok});
-  },[apiKey,proxyUrl,goal,plan,isGated,jwt,saveRun,loadRuns,model,parallel,customMaxTok,branch,cA,chainMode,effectiveAgents,geminiKey,addLog]);
+  },[apiKey,proxyUrl,goal,plan,isGated,saveRun,loadRuns,model,parallel,customMaxTok,branch,cA,chainMode,effectiveAgents,geminiKey,addLog]);
 
   useEffect(()=>{
     if(Notification.permission==="default")Notification.requestPermission();
@@ -925,7 +925,7 @@ export default function App() {
       onDone:()=>{const el=((Date.now()-agTimerRef.current[name])/1000).toFixed(1);setAgOut(p=>({...p,[name]:{...p[name],status:"done",elapsed:el}}));addLog(`[${name}] retried in ${el}s ~${tokCount} tok`);},
       onErr:e=>{setAgOut(p=>({...p,[name]:{text:"ERROR: "+e,status:"error"}}));},
       ...cA,_maxTok:maxTok});
-                        },[goal,plan,proxyUrl,apiKey,jwt,model,customMaxTok,cA,addLog]);
+  },[goal,plan,proxyUrl,apiKey,customMaxTok,cA,addLog]);
 
   const branchFrom=run=>{setGoal(run.goal||"");setBranch("branch-"+Date.now().toString(36));setCommitMsg("Branched from v"+(run.version_num||"?"));setTab("swarm");};
   const restoreRun=run=>{setGoal(run.goal||"");setBranch(run.branch||"main");setCommitMsg("Restored v"+(run.version_num||"?"));setTab("swarm");};
