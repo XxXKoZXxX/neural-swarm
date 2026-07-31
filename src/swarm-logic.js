@@ -1,17 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-
-const AGENTS = {
-  ARCHITECT:  { sys: "You are a senior software architect. Design schemas, system breakdowns, and technical decisions. Be production-grade and concise." },
-  CODER:      { sys: "You are a senior engineer. Write complete, runnable, production-ready code. Include a HOW TO RUN section." },
-  DEBUGGER:   { sys: "You are a debugging specialist. Find real bugs, explain each one clearly, output fully fixed code." },
-  TESTER:     { sys: "You are a QA engineer. Write complete test suites with edge cases, mocks, and assertions." },
-  ANALYST:    { sys: "You are a critical analyst. Score work /10, identify weaknesses, give prioritized improvements." },
-  REFACTORER: { sys: "You are a refactoring expert. Apply DRY, clean naming, patterns. Output change log + refactored code." },
-  RESEARCHER: { sys: "You are a technical researcher. Deep research with comparisons, tradeoffs, version-specific details." },
-  WRITER:     { sys: "You are a technical writer. Write READMEs, docs, reports. Adapt tone to the audience." },
-  REVIEWER:   { sys: "You are a principal engineer. Code review: rate [CRITICAL/MAJOR/MINOR/NIT]. Correctness, security, performance." },
-  DESIGNER:   { sys: "You are a UI/UX designer. Detailed visual direction: layout, palette, typography, components, UX flows." },
-};
+import { AGENT_PROMPTS } from "./agents.js";
 
 const PERSONALITIES = {
   "Dark Detective":      "Approach like a hardboiled detective — methodical, suspicious of every assumption, never satisfied until the real culprit is found.",
@@ -25,11 +13,11 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export const SwarmSDK = {
   async triggerAgent(agentName, { context = "", errorLogs = "", task = "", personality = "" } = {}) {
-    const agent = AGENTS[agentName.toUpperCase()];
-    if (!agent) throw new Error(`Unknown agent: ${agentName}. Available: ${Object.keys(AGENTS).join(", ")}`);
+    const agentPrompt = AGENT_PROMPTS[agentName.toUpperCase()];
+    if (!agentPrompt) throw new Error(`Unknown agent: ${agentName}. Available: ${Object.keys(AGENT_PROMPTS).join(", ")}`);
 
     const personalityPrefix = PERSONALITIES[personality] ? `PERSONALITY: ${PERSONALITIES[personality]}\n\n` : "";
-    const systemPrompt = `${personalityPrefix}${agent.sys}`;
+    const systemPrompt = `${personalityPrefix}${agentPrompt}`;
 
     const userContent = [
       context && `CONTEXT:\n${context}`,
@@ -47,5 +35,5 @@ export const SwarmSDK = {
     return response.content[0].text;
   },
 
-  agents: Object.keys(AGENTS),
+  agents: Object.keys(AGENT_PROMPTS),
 };

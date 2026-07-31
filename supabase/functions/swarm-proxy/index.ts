@@ -1,30 +1,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { CORS, jsonError, preflight } from "../_shared/http.ts";
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
+  const options = preflight(req);
+  if (options) return options;
 
   const anthropicKey = Deno.env.get("ANTHROPIC_KEY");
-  if (!anthropicKey) {
-    return new Response(JSON.stringify({ error: "ANTHROPIC_KEY not set" }), {
-      status: 500,
-      headers: { ...CORS, "Content-Type": "application/json" },
-    });
-  }
+  if (!anthropicKey) return jsonError("ANTHROPIC_KEY not set", 500);
 
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON" }), {
-      status: 400,
-      headers: { ...CORS, "Content-Type": "application/json" },
-    });
+    return jsonError("Invalid JSON", 400);
   }
 
   const upstream = await fetch("https://api.anthropic.com/v1/messages", {

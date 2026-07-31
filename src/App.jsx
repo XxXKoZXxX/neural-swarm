@@ -1,17 +1,8 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-
-const AGENTS = {
-  ARCHITECT:  { c:"#00ffe7", i:"⬡", sys:"You are a senior software architect. Design schemas, system breakdowns, and technical decisions. Be production-grade and concise." },
-  CODER:      { c:"#39ff14", i:"⌨", sys:"You are a senior engineer. Write complete, runnable, production-ready code. Include a HOW TO RUN section." },
-  DEBUGGER:   { c:"#ff6b35", i:"🐛", sys:"You are a debugging specialist. Find real bugs, explain each one clearly, output fully fixed code." },
-  TESTER:     { c:"#ffdd00", i:"✓",  sys:"You are a QA engineer. Write complete test suites with edge cases, mocks, and assertions." },
-  ANALYST:    { c:"#bf5fff", i:"◈",  sys:"You are a critical analyst. Score work /10, identify weaknesses, give prioritized improvements." },
-  REFACTORER: { c:"#00b4ff", i:"↺",  sys:"You are a refactoring expert. Apply DRY, clean naming, patterns. Output change log + refactored code." },
-  RESEARCHER: { c:"#ff3cac", i:"◉",  sys:"You are a technical researcher. Deep research with comparisons, tradeoffs, version-specific details." },
-  WRITER:     { c:"#fff176", i:"✎",  sys:"You are a technical writer. Write READMEs, docs, reports. Adapt tone to the audience." },
-  REVIEWER:   { c:"#ff6eb4", i:"👁",  sys:"You are a principal engineer. Code review: rate [CRITICAL/MAJOR/MINOR/NIT]. Correctness, security, performance." },
-  DESIGNER:   { c:"#ff007f", i:"◇",  sys:"You are a UI/UX designer. Detailed visual direction: layout, palette, typography, components, UX flows." },
-};
+import { AGENTS } from "./agents.js";
+import { MODELS, isGemini, streamClaude, callClaude, compressCtx } from "./llm.js";
+import { mkDb, mkAuth, callFunction } from "./supabase.js";
+import { buildRunMarkdown } from "./export.js";
 const PF_P=["Stoic Philosopher","Dark Detective","Mad Scientist","Corporate Lawyer","War General","Hacker Anarchist","Buddhist Monk","Wall Street Shark","Cold Bureaucrat","Silicon Valley CEO","Ancient Oracle","Rogue AI","Nihilist Scholar","Ruthless Strategist","Shadow Broker","Alien Anthropologist","Jaded Journalist","Burnt-Out Visionary"];
 const PF_T=["Blunt & Brutal","Cold & Clinical","Poetic & Dense","Conspiratorial","Dry & Sardonic","Hyper-Technical","Cryptic Riddles","Bureaucratic","Raw & Unfiltered","Urgent Manifesto","Minimal & Precise","Noir Monologue"];
 const PF_C=["Max 80 words","No questions allowed","Numbered steps only","One sentence per idea","No adjectives","Begin with a quote","Use an analogy","End with a warning","Include a contradiction","No passive voice","Start mid-thought","Use a code metaphor","Never explain why","Dense single paragraph","Return only the core truth"];
@@ -37,111 +28,6 @@ const lbl={color:T.muted,fontSize:"10px",textTransform:"uppercase",letterSpacing
 const sec={color:T.dim,fontSize:"10px",textTransform:"uppercase",letterSpacing:"3px",marginBottom:"8px",marginTop:"14px"};
 const rankScore=t=>(t.rating?parseFloat(t.rating):0)*2+Math.log10((t.usage||t.usage_count||0)+1);
 
-// ── API ───────────────────────────────────────────────────────────────────────
-const MODELS=[
-  {id:"claude-sonnet-4-20250514",  label:"Sonnet 4",         provider:"anthropic"},
-  {id:"claude-opus-4-20250514",    label:"Opus 4",           provider:"anthropic"},
-  {id:"claude-haiku-4-5-20251001", label:"Haiku 4.5",        provider:"anthropic"},
-  {id:"claude-sonnet-3-7-20250219",label:"Sonnet 3.7",       provider:"anthropic"},
-  {id:"gemini-2.5-pro",            label:"Gemini 2.5 Pro",   provider:"gemini"},
-  {id:"gemini-2.5-flash",          label:"Gemini 2.5 Flash", provider:"gemini"},
-  {id:"gemini-2.0-flash",          label:"Gemini 2.0 Flash", provider:"gemini"},
-];
-const isGemini=id=>id?.startsWith("gemini");
-async function streamGemini({messages,system,onToken,onDone,onErr,_geminiKey="",_maxTok=1000,_model="gemini-2.5-flash"}) {
-  if(!_geminiKey){onErr("Gemini API key not set — add it in ⚙ Settings.");return;}
-  const url=`https://generativelanguage.googleapis.com/v1beta/models/${_model}:streamGenerateContent?alt=sse&key=${_geminiKey}`;
-  const body={contents:messages.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]})),generationConfig:{maxOutputTokens:_maxTok},...(system?{systemInstruction:{parts:[{text:system}]}}:{})};
-  try {
-    const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-    if(!res.ok){const d=await res.json().catch(()=>({}));onErr(`HTTP ${res.status}: ${d.error?.message||"Gemini error"}`);return;}
-    const reader=res.body.getReader(),dec=new TextDecoder();let buf="";
-    while(true){
-      const {done,value}=await reader.read();if(done)break;
-      buf+=dec.decode(value,{stream:true});
-      const lines=buf.split("\n");buf=lines.pop();
-      for(const l of lines){
-        if(!l.startsWith("data:"))continue;
-        const raw=l.slice(5).trim();if(raw==="[DONE]")continue;
-        try{const ev=JSON.parse(raw);const t=ev.candidates?.[0]?.content?.parts?.[0]?.text;if(t)onToken(t);}catch{ /* ignore parse errors */ }
-      }
-    }
-    onDone();
-  }catch(e){onErr(e.message);}
-}
-async function callGemini({messages,system,_geminiKey="",_maxTok=1000,_model="gemini-2.5-flash"}) {
-  if(!_geminiKey)throw new Error("Gemini API key not set — add it in ⚙ Settings.");
-  const url=`https://generativelanguage.googleapis.com/v1beta/models/${_model}:generateContent?key=${_geminiKey}`;
-  const body={contents:messages.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]})),generationConfig:{maxOutputTokens:_maxTok},...(system?{systemInstruction:{parts:[{text:system}]}}:{})};
-  const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-  const d=await res.json();
-  if(!res.ok)throw new Error(d.error?.message||`HTTP ${res.status}`);
-  return d.candidates?.[0]?.content?.parts?.[0]?.text||"";
-}
-async function streamClaude({messages,system,onToken,onDone,onErr,_key="",_proxy="",_jwt="",_maxTok=1000,_model="",_geminiKey=""}) {
-  if(isGemini(_model))return streamGemini({messages,system,onToken,onDone,onErr,_geminiKey,_maxTok,_model});
-  const up=!!_proxy;
-  const url=up?_proxy:"https://api.anthropic.com/v1/messages";
-  const hdr=up?{"Content-Type":"application/json","Authorization":`Bearer ${_jwt||_key}`}:{"Content-Type":"application/json","x-api-key":_key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
-  try {
-    const res=await fetch(url,{method:"POST",headers:hdr,body:JSON.stringify({model:_model||"claude-sonnet-4-20250514",max_tokens:_maxTok,stream:true,system,messages})});
-    if (!res.ok) {
-      const ct=res.headers.get("content-type")||"";
-      const body=ct.includes("json")?(await res.json()).error?.message:await res.text();
-      onErr(`HTTP ${res.status}: ${String(body).slice(0,160)}`); return;
-    }
-    const reader=res.body.getReader(),dec=new TextDecoder();let buf="";
-    while(true) {
-      const {done,value}=await reader.read();if(done)break;
-      buf+=dec.decode(value,{stream:true});
-      const lines=buf.split("\n");buf=lines.pop();
-      for(const l of lines) {
-        if(!l.startsWith("data:"))continue;
-        const raw=l.slice(5).trim();if(raw==="[DONE]")continue;
-        try{const ev=JSON.parse(raw);if(ev.type==="content_block_delta"&&ev.delta?.type==="text_delta")onToken(ev.delta.text);}catch{ /* ignore parse errors */ }
-      }
-    }
-    onDone();
-  } catch(e){onErr(e.message);}
-}
-async function callClaude({messages,system,_key="",_proxy="",_jwt="",_model="",_geminiKey=""}) {
-  if(isGemini(_model))return callGemini({messages,system,_geminiKey,_model});
-  const up=!!_proxy;
-  const url=up?_proxy:"https://api.anthropic.com/v1/messages";
-  const hdr=up?{"Content-Type":"application/json","Authorization":`Bearer ${_jwt||_key}`}:{"Content-Type":"application/json","x-api-key":_key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
-  const res=await fetch(url,{method:"POST",headers:hdr,body:JSON.stringify({model:_model||"claude-sonnet-4-20250514",max_tokens:1000,system,messages})});
-  const ct=res.headers.get("content-type")||"";
-  if(!ct.includes("json")){const t=await res.text();throw new Error(`HTTP ${res.status}: ${t.slice(0,120)}`);}
-  const d=await res.json();
-  if(!res.ok)throw new Error(d.error?.message||`HTTP ${res.status}`);
-  return d.content?.[0]?.text||"";
-}
-async function compressCtx(ctx,goal,_key,_proxy,_jwt,_model,_geminiKey) {
-  if(!ctx.length)return"";
-  try {
-    const s=await callClaude({system:"Summarize agent outputs into 3-5 compact sentences preserving ALL technical decisions, code, and key facts. No fluff.",messages:[{role:"user",content:`GOAL: ${goal}\n\n${ctx.map(c=>`[${c.agent}]: ${c.output.slice(0,600)}`).join("\n\n")}`}],_key,_proxy,_jwt,_model,_geminiKey});
-    return`\n\nPRIOR CONTEXT (compressed):\n${s}`;
-  } catch{return`\n\nPRIOR CONTEXT:\n${ctx.map(c=>`[${c.agent}]: ${c.output.slice(0,300)}`).join("\n\n")}`;}
-}
-
-// ── SUPABASE ──────────────────────────────────────────────────────────────────
-function mkDb(url,key) {
-  const base=url.replace(/\/$/,"");
-  const h={"Content-Type":"application/json","apikey":key,"Authorization":`Bearer ${key}`};
-  return {
-    async ins(t,row){const r=await fetch(`${base}/rest/v1/${t}`,{method:"POST",headers:{...h,"Prefer":"return=representation"},body:JSON.stringify(row)});if(!r.ok)throw new Error((await r.json()).message);return r.json();},
-    async sel(t,q=""){const r=await fetch(`${base}/rest/v1/${t}?${q}`,{headers:h});if(!r.ok)throw new Error((await r.json()).message);return r.json();},
-    async del(t,id){await fetch(`${base}/rest/v1/${t}?id=eq.${id}`,{method:"DELETE",headers:h});},
-  };
-}
-function mkAuth(url,key) {
-  const base=url.replace(/\/$/,"");const h={"Content-Type":"application/json","apikey":key};
-  return {
-    async signIn(e,p){const r=await fetch(`${base}/auth/v1/token?grant_type=password`,{method:"POST",headers:h,body:JSON.stringify({email:e,password:p})});const d=await r.json();if(!r.ok)throw new Error(d.error_description||"Failed");return d;},
-    async signUp(e,p){const r=await fetch(`${base}/auth/v1/signup`,{method:"POST",headers:h,body:JSON.stringify({email:e,password:p})});const d=await r.json();if(!r.ok)throw new Error(d.error_description||"Failed");return d;},
-  };
-}
-
 // ── SUB-COMPONENTS ────────────────────────────────────────────────────────────
 function AgentCard({name,out,onRetry,agDef}) {
   const ag=agDef||AGENTS[name]||{c:T.muted,i:"⬡",sys:""};
@@ -162,6 +48,15 @@ function AgentCard({name,out,onRetry,agDef}) {
         </div>
       </div>
       {expanded&&<div style={{color:"#8af",fontSize:"12px",lineHeight:1.6,whiteSpace:"pre-wrap",maxHeight:"220px",overflowY:"auto"}}>{out.text}{out.status==="running"&&"▋"}</div>}
+    </div>
+  );
+}
+
+function OverseerPanel({title="OVERSEER",text,streaming=false,glow=false}) {
+  return (
+    <div style={{border:`1px solid ${T.purple}`,background:"#0d0815",padding:"12px",marginTop:"8px",...(glow?{boxShadow:`0 0 12px ${T.purple}22`}:{})}}>
+      <div style={{color:T.purple,fontSize:"11px",letterSpacing:"3px",marginBottom:"8px"}}>◈ {title}</div>
+      <div style={{color:"#8af",fontSize:"12px",lineHeight:1.6,whiteSpace:"pre-wrap",maxHeight:"200px",overflowY:"auto"}}>{text}{streaming&&"▋"}</div>
     </div>
   );
 }
@@ -282,15 +177,7 @@ function UpgradeModal({used,sbUrl,jwt,onClose,onPro}) {
     if(!sbUrl){alert("Set Supabase URL in ⚙ Settings first.");return;}
     setBusy(plan);
     try{
-      const res=await fetch(sbUrl.replace(/\/$/,"")+"/functions/v1/stripe-checkout",{
-        method:"POST",
-        headers:{"Content-Type":"application/json","Authorization":`Bearer ${jwt}`},
-        body:JSON.stringify({plan}),
-      });
-      const ct=res.headers.get("content-type")||"";
-      if(!ct.includes("json"))throw new Error(`stripe-checkout not deployed yet (HTTP ${res.status})`);
-      const d=await res.json();
-      if(d.error)throw new Error(d.error);
+      const d=await callFunction(sbUrl,"stripe-checkout",jwt,{plan});
 // eslint-disable-next-line react-hooks/immutability -- redirect in click-triggered async handler, not during render
       if(d.url)window.location=d.url;
     }catch(e){alert(e.message);}
@@ -757,6 +644,30 @@ export default function App() {
     }
     },[addLog]);
 
+  // Alerts and returns true when the credentials for the selected model are missing.
+  const missingKeys=useCallback(()=>{
+    if(isGemini(model)?!!geminiKey:!!(proxyUrl||apiKey))return false;
+    alert(isGemini(model)?"Enter Gemini API key in ⚙ Settings.":"Enter API key or proxy URL in ⚙ Settings.");
+    return true;
+  },[model,geminiKey,proxyUrl,apiKey]);
+
+  // Streams one agent's output into agOut, tracking elapsed time and token count.
+  const streamAgent=useCallback(async({name,sys,task,maxTok,onComplete,onFail})=>{
+    setAgOut(p=>({...p,[name]:{text:"",status:"running"}}));
+    agTimerRef.current[name]=Date.now();
+    let full="",tokCount=0;
+    await streamClaude({system:sys,messages:[{role:"user",content:`GOAL: ${goal}\n\nTASK: ${task}`}],
+      onToken:t=>{full+=t;tokCount++;setAgOut(p=>({...p,[name]:{text:(p[name]?.text||"")+t,status:"running"}}));},
+      onDone:()=>{
+        const elapsed=((Date.now()-agTimerRef.current[name])/1000).toFixed(1);
+        setAgOut(p=>({...p,[name]:{...p[name],status:"done",elapsed}}));
+        onComplete?.({full,tokCount,elapsed});
+      },
+      onErr:e=>{setAgOut(p=>({...p,[name]:{text:"ERROR: "+e,status:"error"}}));onFail?.(e);},
+      ...cA,_maxTok:maxTok});
+    return full;
+  },[goal,cA]);
+
   const loadRuns=useCallback(async()=>{
     if(!sbUrl||!sbKey)return;
     setRunsLoading(true);
@@ -777,7 +688,7 @@ export default function App() {
   },[sbUrl,sbKey,goal,branch,commitMsg,runs,session,addLog]);
 
   const handleRun=useCallback(async()=>{
-    if(isGemini(model)?!geminiKey:(!proxyUrl&&!apiKey))return alert(isGemini(model)?"Enter Gemini API key in ⚙ Settings.":"Enter API key or proxy URL in ⚙ Settings.");
+    if(missingKeys())return;
     if(!goal.trim())return alert("Enter a goal.");
     if(isGated){setShowUpg(true);return;}
     abortRef.current=false;setRunning(true);setPhase("orchestrating");
@@ -799,25 +710,18 @@ export default function App() {
 
     const runStep=async(step,ctxBlock,idx)=>{
       if(abortRef.current)return;
-      const ag=effectiveAgents[step.name];
       addLog(`[${step.name}] starting...`);
-      setAgOut(p=>({...p,[step.name]:{text:"",status:"running"}}));
-      agTimerRef.current[step.name]=Date.now();
-      let full="",tokCount=0;
-      await streamClaude({system:ag.sys,messages:[{role:"user",content:`GOAL: ${goal}\n\nTASK: ${step.instruction}${ctxBlock}`}],
-        onToken:t=>{full+=t;tokCount++;setAgOut(p=>({...p,[step.name]:{text:(p[step.name]?.text||"")+t,status:"running"}}));},
-        onDone:()=>{
-          const elapsed=((Date.now()-agTimerRef.current[step.name])/1000).toFixed(1);
+      return streamAgent({
+        name:step.name,sys:effectiveAgents[step.name].sys,task:`${step.instruction}${ctxBlock}`,maxTok,
+        onComplete:({full,tokCount,elapsed})=>{
           totalTok+=tokCount;setRunCost(totalTok*COST_PER_TOK);
-          setAgOut(p=>({...p,[step.name]:{...p[step.name],status:"done",elapsed}}));
           setAgTimes(p=>({...p,[step.name]:elapsed}));
           ctx.push({agent:step.name,output:full});finals[step.name]={text:full,status:"done",elapsed};
           setRunProgress(Math.round(((idx+1)/total)*80));
           addLog(`[${step.name}] done in ${elapsed}s ~${tokCount} tok`);
         },
-        onErr:e=>{setAgOut(p=>({...p,[step.name]:{text:"ERROR: "+e,status:"error"}}));finals[step.name]={text:"ERROR: "+e,status:"error"};addLog(`[${step.name}] error.`);},
-        ...cA,_maxTok:maxTok});
-      return full;
+        onFail:e=>{finals[step.name]={text:"ERROR: "+e,status:"error"};addLog(`[${step.name}] error.`);},
+      });
     };
 
     if(parallel){
@@ -830,7 +734,7 @@ export default function App() {
         if(chainMode&&ctx.length){
           ctxBlock=`\n\n--- PRIOR AGENT OUTPUTS (build on these) ---\n${ctx.map(c=>`[${c.agent}]:\n${c.output}`).join("\n\n---\n")}`;
         } else if(ctx.length>=2){
-          ctxBlock=await compressCtx(ctx,goal,cA._key,cA._proxy,cA._jwt,cA._model,cA._geminiKey);
+          ctxBlock=await compressCtx(ctx,goal,cA);
         } else if(ctx.length){
           ctxBlock=`\n\nPREVIOUS OUTPUTS:\n${ctx.map(c=>`[${c.agent}]: ${c.output.slice(0,500)}`).join("\n\n")}`;
         }
@@ -850,7 +754,7 @@ export default function App() {
       },
       onErr:e=>{setOverseer("ERROR: "+e);setPhase("done");setRunning(false);},
       ...cA,_maxTok:maxTok});
-  },[apiKey,proxyUrl,goal,plan,isGated,saveRun,loadRuns,model,parallel,customMaxTok,branch,cA,chainMode,effectiveAgents,geminiKey,addLog]);
+  },[proxyUrl,goal,plan,isGated,saveRun,loadRuns,model,parallel,customMaxTok,branch,cA,chainMode,effectiveAgents,addLog,streamAgent,missingKeys]);
 
   useEffect(()=>{
     if(Notification.permission==="default")Notification.requestPermission();
@@ -874,20 +778,17 @@ export default function App() {
   },[tab,loadRuns,loadDbTpls]);
 
   const handleForge=useCallback(async()=>{
-    if(isGemini(model)?!geminiKey:(!proxyUrl&&!apiKey))return alert(isGemini(model)?"Enter Gemini API key in ⚙ Settings.":"Enter API key or proxy URL in ⚙ Settings.");
+    if(missingKeys())return;
     setPfBusy(true);setPfOut("");
     await streamClaude({system:`You are a ${pfP}. Respond in ${pfT} tone. Constraint: ${pfC}. Transform or generate the user's prompt. Output ONLY the reforged prompt.`,messages:[{role:"user",content:pfRaw.trim()||"Generate a powerful software goal."}],onToken:t=>setPfOut(o=>o+t),onDone:()=>setPfBusy(false),onErr:e=>{setPfOut("ERROR: "+e);setPfBusy(false);},...cA});
-  },[apiKey,proxyUrl,pfP,pfT,pfC,pfRaw,cA,geminiKey,model]);
+  },[pfP,pfT,pfC,pfRaw,cA,missingKeys]);
+
+  const runMarkdown=useCallback(()=>buildRunMarkdown({goal,branch,agents:agOut,overseer,agentDefs:effectiveAgents}),[goal,branch,agOut,overseer,effectiveAgents]);
 
   const exportMarkdown=useCallback(()=>{
-    const lines=[`# Neural Swarm Run\n**Goal:** ${goal}\n**Branch:** ${branch}\n**Date:** ${new Date().toLocaleString()}\n`];
-    Object.entries(agOut).forEach(([name,out])=>{
-      lines.push(`## ${AGENTS[name]?.i||""} ${name}\n\`\`\`\n${out.text}\n\`\`\`\n`);
-    });
-    if(overseer)lines.push(`## ◈ OVERSEER\n${overseer}\n`);
-    const blob=new Blob([lines.join("\n")],{type:"text/markdown"});
+    const blob=new Blob([runMarkdown()],{type:"text/markdown"});
     const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`swarm-${Date.now()}.md`;a.click();
-  },[goal,branch,agOut,overseer]);
+  },[runMarkdown]);
 
   const copyAll=useCallback(()=>{
     const parts=Object.entries(agOut).map(([name,out])=>`=== ${name} ===\n${out.text}`);
@@ -896,14 +797,13 @@ export default function App() {
   },[agOut,overseer]);
 
   const exportGist=useCallback(async()=>{
-    const md=[`# Neural Swarm Run\n**Goal:** ${goal}\n**Branch:** ${branch}\n**Date:** ${new Date().toLocaleString()}\n`,...Object.entries(agOut).map(([n,o])=>`## ${effectiveAgents[n]?.i||"⬡"} ${n}\n\`\`\`\n${o.text}\n\`\`\``),...(overseer?[`## ◈ OVERSEER\n${overseer}`]:[])].join("\n");
     try{
-      const res=await fetch("https://api.github.com/gists",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({public:true,description:`Neural Swarm: ${goal.slice(0,80)}`,files:{"swarm-run.md":{content:md}}})});
+      const res=await fetch("https://api.github.com/gists",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({public:true,description:`Neural Swarm: ${goal.slice(0,80)}`,files:{"swarm-run.md":{content:runMarkdown()}}})});
       const d=await res.json();
       if(d.html_url)window.open(d.html_url,"_blank");
       else throw new Error(d.message||"No URL returned");
     }catch(e){alert("Gist error: "+e.message);}
-  },[goal,branch,agOut,overseer,effectiveAgents]);
+  },[goal,runMarkdown]);
 
   const sendWebhook=useCallback(async()=>{
     if(!webhookUrl)return alert("Set Webhook URL in ⚙ Settings first.");
@@ -916,16 +816,12 @@ export default function App() {
 
   const retryAgent=useCallback(async(name)=>{
     const ag=AGENTS[name];if(!ag||!goal.trim()||(!(proxyUrl||apiKey)))return;
-    setAgOut(p=>({...p,[name]:{text:"",status:"running"}}));
-    agTimerRef.current[name]=Date.now();
-    let _full="",tokCount=0;
-    const maxTok=customMaxTok||PLAN_TOKENS[plan]||PLAN_TOKENS.free;
-    await streamClaude({system:ag.sys,messages:[{role:"user",content:`GOAL: ${goal}\n\nTASK: Retry and complete your task for this goal.`}],
-      onToken:t=>{_full+=t;tokCount++;setAgOut(p=>({...p,[name]:{text:(p[name]?.text||"")+t,status:"running"}}));},
-      onDone:()=>{const el=((Date.now()-agTimerRef.current[name])/1000).toFixed(1);setAgOut(p=>({...p,[name]:{...p[name],status:"done",elapsed:el}}));addLog(`[${name}] retried in ${el}s ~${tokCount} tok`);},
-      onErr:e=>{setAgOut(p=>({...p,[name]:{text:"ERROR: "+e,status:"error"}}));},
-      ...cA,_maxTok:maxTok});
-  },[goal,plan,proxyUrl,apiKey,customMaxTok,cA,addLog]);
+    await streamAgent({
+      name,sys:ag.sys,task:"Retry and complete your task for this goal.",
+      maxTok:customMaxTok||PLAN_TOKENS[plan]||PLAN_TOKENS.free,
+      onComplete:({tokCount,elapsed})=>addLog(`[${name}] retried in ${elapsed}s ~${tokCount} tok`),
+    });
+  },[goal,plan,proxyUrl,apiKey,customMaxTok,streamAgent,addLog]);
 
   const branchFrom=run=>{setGoal(run.goal||"");setBranch("branch-"+Date.now().toString(36));setCommitMsg("Branched from v"+(run.version_num||"?"));setTab("swarm");};
   const restoreRun=run=>{setGoal(run.goal||"");setBranch(run.branch||"main");setCommitMsg("Restored v"+(run.version_num||"?"));setTab("swarm");};
@@ -948,12 +844,8 @@ export default function App() {
     if(!sbUrl){alert("Set Supabase URL in ⚙ Settings to enable purchases.");return;}
     try{
       addLog(`Opening Stripe checkout for "${t.name}"...`);
-      const res=await fetch(sbUrl.replace(/\/$/,"")+"/functions/v1/stripe-checkout",{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${jwt}`},body:JSON.stringify({templateId:t.id})});
-      const ct=res.headers.get("content-type")||"";
-      if(!ct.includes("json"))throw new Error(`Checkout ${res.status} — deploy stripe-checkout function first.`);
-      const d=await res.json();
+      const d=await callFunction(sbUrl,"stripe-checkout",jwt,{templateId:t.id});
       if(d.already_purchased){setPurchased(p=>new Set([...p,t.id]));setGoal(t.goal||"");setTab("swarm");return;}
-      if(d.error)throw new Error(d.error);
       if(d.url)window.open(d.url,"_blank");
     }catch(e){addLog("Stripe: "+e.message);alert(e.message);}
   };
@@ -1143,12 +1035,7 @@ export default function App() {
                 </div>
               )}
               {Object.keys(agOut).map(name=><AgentCard key={name} name={name} out={agOut[name]} onRetry={retryAgent} agDef={effectiveAgents[name]}/>)}
-              {(overseer||phase==="overseeing")&&(
-                <div style={{border:`1px solid ${T.purple}`,background:"#0d0815",padding:"12px",marginTop:"8px",boxShadow:`0 0 12px ${T.purple}22`}}>
-                  <div style={{color:T.purple,fontSize:"11px",letterSpacing:"3px",marginBottom:"8px"}}>◈ OVERSEER EVALUATION</div>
-                  <div style={{color:"#8af",fontSize:"12px",lineHeight:1.6,whiteSpace:"pre-wrap",maxHeight:"200px",overflowY:"auto"}}>{overseer}{phase==="overseeing"&&"▋"}</div>
-                </div>
-              )}
+              {(overseer||phase==="overseeing")&&<OverseerPanel title="OVERSEER EVALUATION" text={overseer} streaming={phase==="overseeing"} glow/>}
               {phase==="done"&&(
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:"10px"}}>
                   <div style={{color:T.green,fontSize:"11px",letterSpacing:"2px"}}>✓ COMPLETE {sbStatus==="saved"?"· SAVED ✓":sbStatus==="saving"?"· SAVING...":sbStatus==="error"?"· ERR":sbStatus==="nosupa"?"· (no db)":""}</div>
@@ -1235,12 +1122,7 @@ export default function App() {
                   <span>{new Date(viewRun.created_at).toLocaleString()}</span>
                 </div>
                 {Object.entries(viewRun.agents||{}).map(([name,out])=><AgentCard key={name} name={name} out={out}/>)}
-                {viewRun.overseer&&(
-                  <div style={{border:`1px solid ${T.purple}`,background:"#0d0815",padding:"12px",marginTop:"8px"}}>
-                    <div style={{color:T.purple,fontSize:"11px",letterSpacing:"3px",marginBottom:"8px"}}>◈ OVERSEER</div>
-                    <div style={{color:"#8af",fontSize:"12px",lineHeight:1.6,whiteSpace:"pre-wrap",maxHeight:"200px",overflowY:"auto"}}>{viewRun.overseer}</div>
-                  </div>
-                )}
+                {viewRun.overseer&&<OverseerPanel text={viewRun.overseer}/>}
               </div>
             ):(
               <div>
