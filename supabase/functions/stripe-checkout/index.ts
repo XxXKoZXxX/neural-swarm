@@ -1,11 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
-
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { json, jsonError, preflight } from "../_shared/http.ts";
+import { restClient } from "../_shared/supabase.ts";
 
 // Paste your Stripe price IDs here after creating the products in Stripe dashboard
 const PRICE_IDS: Record<string, string> = {
@@ -14,26 +10,22 @@ const PRICE_IDS: Record<string, string> = {
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
+  const options = preflight(req);
+  if (options) return options;
 
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
   const frontendUrl = Deno.env.get("FRONTEND_URL") ?? "http://localhost:5173";
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  if (!stripeKey) {
-    return new Response(JSON.stringify({ error: "STRIPE_SECRET_KEY not set" }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
-    });
-  }
+  if (!stripeKey) return jsonError("STRIPE_SECRET_KEY not set", 500);
 
   const stripe = new Stripe(stripeKey, { apiVersion: "2024-06-20", httpClient: Stripe.createFetchHttpClient() });
+  const db = restClient(supabaseUrl, supabaseKey);
 
   let body: { plan?: string; templateId?: string };
   try { body = await req.json(); } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON" }), {
-      status: 400, headers: { ...CORS, "Content-Type": "application/json" },
-    });
+    return jsonError("Invalid JSON", 400);
   }
 
   // ── Subscription checkout (plan upgrade) ───────────────────────────────────
@@ -46,9 +38,7 @@ serve(async (req) => {
       success_url: `${frontendUrl}?upgraded=true&plan=${body.plan}`,
       cancel_url:  `${frontendUrl}?upgraded=false`,
     });
-    return new Response(JSON.stringify({ url: session.url }), {
-      headers: { ...CORS, "Content-Type": "application/json" },
-    });
+    return json({ url: session.url });
   }
 
   // ── One-time template purchase ─────────────────────────────────────────────
@@ -56,44 +46,24 @@ serve(async (req) => {
     const tid = body.templateId;
 
     // Fetch template price from Supabase
-    const tplRes = await fetch(
-      `${supabaseUrl}/rest/v1/templates?id=eq.${tid}&select=id,name,price`,
-      { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } },
+    const [tpl] = await db.select<{ id: string; name: string; price: number }>(
+      "templates",
+      `id=eq.${tid}&select=id,name,price`,
     );
-    const [tpl] = await tplRes.json();
-    if (!tpl) {
-      return new Response(JSON.stringify({ error: "Template not found" }), {
-        status: 404, headers: { ...CORS, "Content-Type": "application/json" },
-      });
-    }
+    if (!tpl) return jsonError("Template not found", 404);
 
     // Check for existing purchase (using email from JWT if present)
     const authHeader = req.headers.get("Authorization") ?? "";
     const jwt = authHeader.replace("Bearer ", "");
     if (jwt && jwt !== supabaseKey) {
-      const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
-        headers: { apikey: supabaseKey, Authorization: `Bearer ${jwt}` },
-      });
-      if (userRes.ok) {
-        const user = await userRes.json();
-        const purchaseRes = await fetch(
-          `${supabaseUrl}/rest/v1/template_purchases?user_id=eq.${user.id}&template_id=eq.${tid}`,
-          { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } },
-        );
-        const purchases = await purchaseRes.json();
-        if (purchases?.length > 0) {
-          return new Response(JSON.stringify({ already_purchased: true }), {
-            headers: { ...CORS, "Content-Type": "application/json" },
-          });
-        }
+      const user = await db.user(jwt);
+      if (user) {
+        const purchases = await db.select("template_purchases", `user_id=eq.${user.id}&template_id=eq.${tid}`);
+        if (purchases?.length > 0) return json({ already_purchased: true });
       }
     }
 
-    if (!tpl.price || tpl.price === 0) {
-      return new Response(JSON.stringify({ already_purchased: true }), {
-        headers: { ...CORS, "Content-Type": "application/json" },
-      });
-    }
+    if (!tpl.price || tpl.price === 0) return json({ already_purchased: true });
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -111,12 +81,8 @@ serve(async (req) => {
       metadata: { templateId: tid },
     });
 
-    return new Response(JSON.stringify({ url: session.url }), {
-      headers: { ...CORS, "Content-Type": "application/json" },
-    });
+    return json({ url: session.url });
   }
 
-  return new Response(JSON.stringify({ error: "Provide plan or templateId" }), {
-    status: 400, headers: { ...CORS, "Content-Type": "application/json" },
-  });
+  return jsonError("Provide plan or templateId", 400);
 });
