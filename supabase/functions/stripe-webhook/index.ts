@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 serve(async (req) => {
   const stripeKey     = Deno.env.get("STRIPE_SECRET_KEY")!;
   const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
@@ -28,18 +30,19 @@ serve(async (req) => {
     const session = event.data.object as Stripe.Checkout.Session;
     const templateId = session.metadata?.templateId;
 
-    if (templateId) {
+    if (templateId && UUID_RE.test(templateId)) {
+      const tplFilter = `${db("templates")}?id=eq.${encodeURIComponent(templateId)}`;
       // Record purchase
       await fetch(db("template_purchases"), {
         method: "POST",
         headers,
-        body: JSON.stringify({ template_id: templateId, customer_email: session.customer_details?.email, amount: (session.amount_total ?? 0) / 100 }),
+        body: JSON.stringify({ template_id: templateId, user_id: session.metadata?.userId ?? null, customer_email: session.customer_details?.email, amount: (session.amount_total ?? 0) / 100 }),
       });
       // Increment usage count
-      const tplRes = await fetch(`${db("templates")}?id=eq.${templateId}`, { headers });
+      const tplRes = await fetch(tplFilter, { headers });
       const [tpl] = await tplRes.json();
       if (tpl) {
-        await fetch(`${db("templates")}?id=eq.${templateId}`, {
+        await fetch(tplFilter, {
           method: "PATCH",
           headers,
           body: JSON.stringify({ usage_count: (tpl.usage_count ?? 0) + 1 }),

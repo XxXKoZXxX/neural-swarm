@@ -134,42 +134,33 @@ Static Vite build — deploys anywhere. Zero backend required for core features.
 ## Supabase Setup (optional — enables persistence, auth, marketplace)
 
 1. Create a Supabase project
-2. Run this schema:
+2. Apply the schema and row level security policies:
 
-```sql
-create table agent_runs (
-  id uuid default gen_random_uuid() primary key,
-  goal text,
-  branch text default 'main',
-  version_num int,
-  run_message text,
-  agents jsonb,
-  overseer text,
-  score text,
-  tokens_used int,
-  cost text,
-  user_email text,
-  is_template boolean default false,
-  created_at timestamptz default now()
-);
-
-create table templates (
-  id uuid default gen_random_uuid() primary key,
-  name text,
-  description text,
-  goal_template text,
-  agent_flow jsonb,
-  tags text[],
-  category text,
-  price numeric default 0,
-  is_public boolean default true,
-  usage_count int default 0,
-  creator_email text,
-  created_at timestamptz default now()
-);
+```bash
+supabase db push   # runs supabase/migrations/*.sql
 ```
 
-3. Paste your Supabase URL and anon key into ⚙ Settings in the app
+3. Set the Edge Function secrets:
+
+```bash
+supabase secrets set ANTHROPIC_KEY=sk-ant-... \
+  ALLOWED_ORIGINS=https://your-app.vercel.app,http://localhost:5173 \
+  STRIPE_SECRET_KEY=sk_live_... STRIPE_WEBHOOK_SECRET=whsec_... \
+  FRONTEND_URL=https://your-app.vercel.app
+```
+
+4. Configure the frontend via `.env` (see `.env.example`) — or paste the same
+   values into ⚙ Settings in the app:
+
+```
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key
+VITE_SWARM_PROXY_URL=https://your-project.supabase.co/functions/v1/swarm-proxy
+```
+
+The `swarm-proxy` and `stripe-checkout` functions require a signed-in user's
+access token — the anon key alone is rejected, so the shared Anthropic key
+cannot be used by anonymous callers.
 
 ## Tech Stack
 

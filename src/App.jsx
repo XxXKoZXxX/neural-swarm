@@ -48,12 +48,13 @@ const MODELS=[
   {id:"gemini-2.0-flash",          label:"Gemini 2.0 Flash", provider:"gemini"},
 ];
 const isGemini=id=>id?.startsWith("gemini");
+const PROXY_AUTH_ERR="Sign in to use the shared proxy, or add your own API key in ⚙ Settings.";
 async function streamGemini({messages,system,onToken,onDone,onErr,_geminiKey="",_maxTok=1000,_model="gemini-2.5-flash"}) {
   if(!_geminiKey){onErr("Gemini API key not set — add it in ⚙ Settings.");return;}
-  const url=`https://generativelanguage.googleapis.com/v1beta/models/${_model}:streamGenerateContent?alt=sse&key=${_geminiKey}`;
+  const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(_model)}:streamGenerateContent?alt=sse`;
   const body={contents:messages.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]})),generationConfig:{maxOutputTokens:_maxTok},...(system?{systemInstruction:{parts:[{text:system}]}}:{})};
   try {
-    const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":_geminiKey},body:JSON.stringify(body)});
     if(!res.ok){const d=await res.json().catch(()=>({}));onErr(`HTTP ${res.status}: ${d.error?.message||"Gemini error"}`);return;}
     const reader=res.body.getReader(),dec=new TextDecoder();let buf="";
     while(true){
@@ -71,18 +72,19 @@ async function streamGemini({messages,system,onToken,onDone,onErr,_geminiKey="",
 }
 async function callGemini({messages,system,_geminiKey="",_maxTok=1000,_model="gemini-2.5-flash"}) {
   if(!_geminiKey)throw new Error("Gemini API key not set — add it in ⚙ Settings.");
-  const url=`https://generativelanguage.googleapis.com/v1beta/models/${_model}:generateContent?key=${_geminiKey}`;
+  const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(_model)}:generateContent`;
   const body={contents:messages.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]})),generationConfig:{maxOutputTokens:_maxTok},...(system?{systemInstruction:{parts:[{text:system}]}}:{})};
-  const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":_geminiKey},body:JSON.stringify(body)});
   const d=await res.json();
   if(!res.ok)throw new Error(d.error?.message||`HTTP ${res.status}`);
   return d.candidates?.[0]?.content?.parts?.[0]?.text||"";
 }
 async function streamClaude({messages,system,onToken,onDone,onErr,_key="",_proxy="",_jwt="",_maxTok=1000,_model="",_geminiKey=""}) {
   if(isGemini(_model))return streamGemini({messages,system,onToken,onDone,onErr,_geminiKey,_maxTok,_model});
-  const up=!!_proxy;
+  const up=!!_proxy&&!!_jwt;
+  if(!up&&!_key){onErr(PROXY_AUTH_ERR);return;}
   const url=up?_proxy:"https://api.anthropic.com/v1/messages";
-  const hdr=up?{"Content-Type":"application/json","Authorization":`Bearer ${_jwt||_key}`}:{"Content-Type":"application/json","x-api-key":_key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
+  const hdr=up?{"Content-Type":"application/json","Authorization":`Bearer ${_jwt}`}:{"Content-Type":"application/json","x-api-key":_key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
   try {
     const res=await fetch(url,{method:"POST",headers:hdr,body:JSON.stringify({model:_model||"claude-sonnet-4-20250514",max_tokens:_maxTok,stream:true,system,messages})});
     if (!res.ok) {
@@ -106,9 +108,10 @@ async function streamClaude({messages,system,onToken,onDone,onErr,_key="",_proxy
 }
 async function callClaude({messages,system,_key="",_proxy="",_jwt="",_model="",_geminiKey=""}) {
   if(isGemini(_model))return callGemini({messages,system,_geminiKey,_model});
-  const up=!!_proxy;
+  const up=!!_proxy&&!!_jwt;
+  if(!up&&!_key)throw new Error(PROXY_AUTH_ERR);
   const url=up?_proxy:"https://api.anthropic.com/v1/messages";
-  const hdr=up?{"Content-Type":"application/json","Authorization":`Bearer ${_jwt||_key}`}:{"Content-Type":"application/json","x-api-key":_key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
+  const hdr=up?{"Content-Type":"application/json","Authorization":`Bearer ${_jwt}`}:{"Content-Type":"application/json","x-api-key":_key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
   const res=await fetch(url,{method:"POST",headers:hdr,body:JSON.stringify({model:_model||"claude-sonnet-4-20250514",max_tokens:1000,system,messages})});
   const ct=res.headers.get("content-type")||"";
   if(!ct.includes("json")){const t=await res.text();throw new Error(`HTTP ${res.status}: ${t.slice(0,120)}`);}
@@ -125,13 +128,17 @@ async function compressCtx(ctx,goal,_key,_proxy,_jwt,_model,_geminiKey) {
 }
 
 // ── SUPABASE ──────────────────────────────────────────────────────────────────
+const ENV_SUPABASE_URL=import.meta.env.VITE_SUPABASE_URL||"";
+const ENV_SUPABASE_ANON_KEY=import.meta.env.VITE_SUPABASE_ANON_KEY||"";
+const ENV_PROXY_URL=import.meta.env.VITE_SWARM_PROXY_URL||(ENV_SUPABASE_URL?`${ENV_SUPABASE_URL.replace(/\/$/,"")}/functions/v1/swarm-proxy`:"");
+
 function mkDb(url,key) {
   const base=url.replace(/\/$/,"");
   const h={"Content-Type":"application/json","apikey":key,"Authorization":`Bearer ${key}`};
   return {
     async ins(t,row){const r=await fetch(`${base}/rest/v1/${t}`,{method:"POST",headers:{...h,"Prefer":"return=representation"},body:JSON.stringify(row)});if(!r.ok)throw new Error((await r.json()).message);return r.json();},
     async sel(t,q=""){const r=await fetch(`${base}/rest/v1/${t}?${q}`,{headers:h});if(!r.ok)throw new Error((await r.json()).message);return r.json();},
-    async del(t,id){await fetch(`${base}/rest/v1/${t}?id=eq.${id}`,{method:"DELETE",headers:h});},
+    async del(t,id){await fetch(`${base}/rest/v1/${t}?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:h});},
   };
 }
 function mkAuth(url,key) {
@@ -679,8 +686,8 @@ export default function App() {
   const [landed,   setLanded]   = useState(false);
   const [apiKey,   setApiKey]   = useState(""); const [showKey,   setShowKey]   = useState(false);
   const [geminiKey,setGeminiKey]= useState(""); const [showGeminiKey,setShowGeminiKey]=useState(false);
-  const [proxyUrl, setProxyUrl] = useState("https://mrqblfyxwdgaarlemufo.supabase.co/functions/v1/swarm-proxy");
-  const [sbUrl,    setSbUrl]    = useState("https://mrqblfyxwdgaarlemufo.supabase.co"); const [sbKey,    setSbKey]    = useState("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ycWJsZnl4d2RnYWFybGVtdWZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzNDg3NzQsImV4cCI6MjA5MTkyNDc3NH0.Xl0vNkUqMmh0036c-bmaHrGpbNdknim69RRyUOXHIqo"); const [showSbKey,setShowSbKey]=useState(false);
+  const [proxyUrl, setProxyUrl] = useState(ENV_PROXY_URL);
+  const [sbUrl,    setSbUrl]    = useState(ENV_SUPABASE_URL); const [sbKey,    setSbKey]    = useState(ENV_SUPABASE_ANON_KEY); const [showSbKey,setShowSbKey]=useState(false);
   const [settings, setSettings] = useState(false);
   const [session,  setSession]  = useState(null);
   const [showAuth, setShowAuth] = useState(false);
@@ -732,7 +739,7 @@ export default function App() {
   const effectiveAgents=useMemo(()=>({...AGENTS,...Object.fromEntries(customAgents.map(a=>[a.name,{c:a.c,i:a.i,sys:a.sys}]))}),[customAgents]);
 
   const isGated=plan==="free"&&runCount>=FREE_LIMIT;
-  const jwt=session?.access_token||sbKey;
+  const jwt=session?.access_token||"";
   const cA=useMemo(()=>({_key:apiKey,_proxy:proxyUrl,_jwt:jwt,_model:model,_geminiKey:geminiKey}),[apiKey,proxyUrl,jwt,model,geminiKey]);
   const phaseColor={idle:T.dim,orchestrating:T.yellow,running:T.cyan,overseeing:T.purple,done:T.green};
   const branches=["all",...new Set(["main",...runs.map(r=>r.branch||"main")])];
