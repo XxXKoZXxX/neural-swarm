@@ -21,7 +21,11 @@ const PERSONALITIES = {
   "Stoic Philosopher":   "Reason from first principles. Be calm, precise, and principled.",
 };
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+function getClient() {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set.");
+  return new Anthropic({ apiKey });
+}
 
 export const SwarmSDK = {
   async triggerAgent(agentName, { context = "", errorLogs = "", task = "", personality = "" } = {}) {
@@ -37,14 +41,23 @@ export const SwarmSDK = {
       task && `TASK:\n${task}`,
     ].filter(Boolean).join("\n\n");
 
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userContent }],
-    });
+    if (!userContent) throw new Error("triggerAgent requires at least one of: context, errorLogs, task.");
 
-    return response.content[0].text;
+    let response;
+    try {
+      response = await getClient().messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userContent }],
+      });
+    } catch (err) {
+      throw new Error(`Anthropic request for ${agentName} failed: ${err.message}`, { cause: err });
+    }
+
+    const text = response.content?.find(b => b.type === "text")?.text;
+    if (!text) throw new Error(`Agent ${agentName} returned no text content (stop reason: ${response.stop_reason ?? "unknown"}).`);
+    return text;
   },
 
   agents: Object.keys(AGENTS),

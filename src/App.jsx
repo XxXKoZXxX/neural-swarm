@@ -55,6 +55,7 @@ async function streamGemini({messages,system,onToken,onDone,onErr,_geminiKey="",
   try {
     const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     if(!res.ok){const d=await res.json().catch(()=>({}));onErr(`HTTP ${res.status}: ${d.error?.message||"Gemini error"}`);return;}
+    if(!res.body){onErr("Gemini returned an empty response stream.");return;}
     const reader=res.body.getReader(),dec=new TextDecoder();let buf="";
     while(true){
       const {done,value}=await reader.read();if(done)break;
@@ -63,7 +64,10 @@ async function streamGemini({messages,system,onToken,onDone,onErr,_geminiKey="",
       for(const l of lines){
         if(!l.startsWith("data:"))continue;
         const raw=l.slice(5).trim();if(raw==="[DONE]")continue;
-        try{const ev=JSON.parse(raw);const t=ev.candidates?.[0]?.content?.parts?.[0]?.text;if(t)onToken(t);}catch{ /* ignore parse errors */ }
+        let ev;
+        try{ev=JSON.parse(raw);}catch(e){console.warn("Skipping malformed Gemini SSE chunk:",e.message);continue;}
+        if(ev.error){onErr(ev.error.message||"Gemini stream error");return;}
+        const t=ev.candidates?.[0]?.content?.parts?.[0]?.text;if(t)onToken(t);
       }
     }
     onDone();
@@ -74,8 +78,8 @@ async function callGemini({messages,system,_geminiKey="",_maxTok=1000,_model="ge
   const url=`https://generativelanguage.googleapis.com/v1beta/models/${_model}:generateContent?key=${_geminiKey}`;
   const body={contents:messages.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]})),generationConfig:{maxOutputTokens:_maxTok},...(system?{systemInstruction:{parts:[{text:system}]}}:{})};
   const res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-  const d=await res.json();
-  if(!res.ok)throw new Error(d.error?.message||`HTTP ${res.status}`);
+  const d=await readBody(res);
+  if(!res.ok||typeof d!=="object"||!d)throw errorFromBody(d,res,"Gemini request failed");
   return d.candidates?.[0]?.content?.parts?.[0]?.text||"";
 }
 async function streamClaude({messages,system,onToken,onDone,onErr,_key="",_proxy="",_jwt="",_maxTok=1000,_model="",_geminiKey=""}) {
@@ -90,6 +94,7 @@ async function streamClaude({messages,system,onToken,onDone,onErr,_key="",_proxy
       const body=ct.includes("json")?(await res.json()).error?.message:await res.text();
       onErr(`HTTP ${res.status}: ${String(body).slice(0,160)}`); return;
     }
+    if(!res.body){onErr("Anthropic returned an empty response stream.");return;}
     const reader=res.body.getReader(),dec=new TextDecoder();let buf="";
     while(true) {
       const {done,value}=await reader.read();if(done)break;
@@ -98,7 +103,10 @@ async function streamClaude({messages,system,onToken,onDone,onErr,_key="",_proxy
       for(const l of lines) {
         if(!l.startsWith("data:"))continue;
         const raw=l.slice(5).trim();if(raw==="[DONE]")continue;
-        try{const ev=JSON.parse(raw);if(ev.type==="content_block_delta"&&ev.delta?.type==="text_delta")onToken(ev.delta.text);}catch{ /* ignore parse errors */ }
+        let ev;
+        try{ev=JSON.parse(raw);}catch(e){console.warn("Skipping malformed Anthropic SSE chunk:",e.message);continue;}
+        if(ev.type==="error"){onErr(ev.error?.message||"Anthropic stream error");return;}
+        if(ev.type==="content_block_delta"&&ev.delta?.type==="text_delta")onToken(ev.delta.text);
       }
     }
     onDone();
@@ -116,30 +124,63 @@ async function callClaude({messages,system,_key="",_proxy="",_jwt="",_model="",_
   if(!res.ok)throw new Error(d.error?.message||`HTTP ${res.status}`);
   return d.content?.[0]?.text||"";
 }
-async function compressCtx(ctx,goal,_key,_proxy,_jwt,_model,_geminiKey) {
+async function compressCtx(ctx,goal,_key,_proxy,_jwt,_model,_geminiKey,onWarn) {
   if(!ctx.length)return"";
   try {
     const s=await callClaude({system:"Summarize agent outputs into 3-5 compact sentences preserving ALL technical decisions, code, and key facts. No fluff.",messages:[{role:"user",content:`GOAL: ${goal}\n\n${ctx.map(c=>`[${c.agent}]: ${c.output.slice(0,600)}`).join("\n\n")}`}],_key,_proxy,_jwt,_model,_geminiKey});
     return`\n\nPRIOR CONTEXT (compressed):\n${s}`;
-  } catch{return`\n\nPRIOR CONTEXT:\n${ctx.map(c=>`[${c.agent}]: ${c.output.slice(0,300)}`).join("\n\n")}`;}
+  } catch(e){
+    onWarn?.(`Context compression failed (${e.message}) — falling back to truncated context.`);
+    return`\n\nPRIOR CONTEXT:\n${ctx.map(c=>`[${c.agent}]: ${c.output.slice(0,300)}`).join("\n\n")}`;
+  }
 }
 
 // ── SUPABASE ──────────────────────────────────────────────────────────────────
+// Reads a response body without throwing on non-JSON payloads (gateway HTML, empty bodies).
+async function readBody(res) {
+  const text=await res.text().catch(()=>"");
+  if(!text)return null;
+  try{return JSON.parse(text);}catch{return text;}
+}
+async function errorFrom(res,fallback) {
+  const body=await readBody(res);
+  const msg=typeof body==="string"?body.slice(0,200):body?.message||body?.error_description||body?.error||body?.msg;
+  return new Error(msg?`${fallback} — ${msg}`:`${fallback} (HTTP ${res.status})`);
+}
 function mkDb(url,key) {
   const base=url.replace(/\/$/,"");
   const h={"Content-Type":"application/json","apikey":key,"Authorization":`Bearer ${key}`};
   return {
-    async ins(t,row){const r=await fetch(`${base}/rest/v1/${t}`,{method:"POST",headers:{...h,"Prefer":"return=representation"},body:JSON.stringify(row)});if(!r.ok)throw new Error((await r.json()).message);return r.json();},
-    async sel(t,q=""){const r=await fetch(`${base}/rest/v1/${t}?${q}`,{headers:h});if(!r.ok)throw new Error((await r.json()).message);return r.json();},
-    async del(t,id){await fetch(`${base}/rest/v1/${t}?id=eq.${id}`,{method:"DELETE",headers:h});},
+    async ins(t,row){const r=await fetch(`${base}/rest/v1/${t}`,{method:"POST",headers:{...h,"Prefer":"return=representation"},body:JSON.stringify(row)});if(!r.ok)throw await errorFrom(r,`Insert into ${t} failed`);return readBody(r);},
+    async sel(t,q=""){const r=await fetch(`${base}/rest/v1/${t}?${q}`,{headers:h});if(!r.ok)throw await errorFrom(r,`Query on ${t} failed`);const d=await readBody(r);if(!Array.isArray(d))throw new Error(`Query on ${t} returned an unexpected payload`);return d;},
+    async del(t,id){const r=await fetch(`${base}/rest/v1/${t}?id=eq.${id}`,{method:"DELETE",headers:h});if(!r.ok)throw await errorFrom(r,`Delete from ${t} failed`);},
   };
 }
 function mkAuth(url,key) {
   const base=url.replace(/\/$/,"");const h={"Content-Type":"application/json","apikey":key};
-  return {
-    async signIn(e,p){const r=await fetch(`${base}/auth/v1/token?grant_type=password`,{method:"POST",headers:h,body:JSON.stringify({email:e,password:p})});const d=await r.json();if(!r.ok)throw new Error(d.error_description||"Failed");return d;},
-    async signUp(e,p){const r=await fetch(`${base}/auth/v1/signup`,{method:"POST",headers:h,body:JSON.stringify({email:e,password:p})});const d=await r.json();if(!r.ok)throw new Error(d.error_description||"Failed");return d;},
+  const post=async(path,email,password,fallback)=>{
+    const r=await fetch(`${base}${path}`,{method:"POST",headers:h,body:JSON.stringify({email,password})});
+    const d=await readBody(r);
+    if(!r.ok)throw await errorFromBody(d,r,fallback);
+    if(!d||typeof d==="string")throw new Error(`${fallback} — unexpected response from Supabase`);
+    return d;
   };
+  return {
+    signIn:(e,p)=>post("/auth/v1/token?grant_type=password",e,p,"Sign in failed"),
+    signUp:(e,p)=>post("/auth/v1/signup",e,p,"Sign up failed"),
+  };
+}
+function errorFromBody(body,res,fallback) {
+  const msg=typeof body==="string"?body.slice(0,200):body?.error_description||body?.msg||body?.message||body?.error;
+  return new Error(msg?`${fallback} — ${msg}`:`${fallback} (HTTP ${res.status})`);
+}
+
+// Clipboard writes reject when permission is denied or the API is unavailable —
+// surface that instead of letting the rejection disappear.
+function copyText(text,onErr) {
+  const report=m=>onErr?onErr(m):alert(m);
+  if(!navigator.clipboard){report("Clipboard unavailable in this browser context.");return;}
+  navigator.clipboard.writeText(text).catch(e=>report("Copy failed: "+e.message));
 }
 
 // ── SUB-COMPONENTS ────────────────────────────────────────────────────────────
@@ -157,7 +198,7 @@ function AgentCard({name,out,onRetry,agDef}) {
           {out.elapsed&&<span style={{color:T.dim,fontSize:"10px"}}>{out.elapsed}s</span>}
           <span style={Dot(out.status)}></span>
           <span style={{color:T.muted,fontSize:"10px"}}>{out.status}</span>
-          {out.status==="done"&&<button onClick={()=>navigator.clipboard?.writeText(out.text)} style={{...Btn(T.dim),padding:"2px 8px",fontSize:"10px"}}>COPY</button>}
+          {out.status==="done"&&<button onClick={()=>copyText(out.text)} style={{...Btn(T.dim),padding:"2px 8px",fontSize:"10px"}}>COPY</button>}
           {out.status==="error"&&onRetry&&<button onClick={()=>onRetry(name)} style={{...Btn(T.orange),padding:"2px 8px",fontSize:"10px"}}>RETRY</button>}
         </div>
       </div>
@@ -720,14 +761,28 @@ export default function App() {
   const [runProgress,setRunProgress]=useState(0);
   const [customMaxTok,setCustomMaxTok]=useState(0);
   const [webhookUrl, setWebhookUrl] = useState(()=>localStorage.getItem("ns_webhook")||"");
-  const [customAgents,setCustomAgents]=useState(()=>{try{return JSON.parse(localStorage.getItem("ns_custom_agents")||"[]");}catch{return[];}});
+  const [customAgents,setCustomAgents]=useState(()=>{
+    try{
+      const parsed=JSON.parse(localStorage.getItem("ns_custom_agents")||"[]");
+      return Array.isArray(parsed)?parsed:[];
+    }catch(e){
+      console.warn("Discarding corrupt ns_custom_agents from localStorage:",e);
+      return[];
+    }
+  });
   const [agentBuilderOpen,setAgentBuilderOpen]=useState(false);
   const [newAgent,   setNewAgent]  = useState({name:"",i:"🤖",c:"#00ffe7",sys:""});
   const abortRef=useRef(false);
   const agTimerRef=useRef({});
 
-  useEffect(()=>{localStorage.setItem("ns_custom_agents",JSON.stringify(customAgents));},[customAgents]);
-  useEffect(()=>{localStorage.setItem("ns_webhook",webhookUrl);},[webhookUrl]);
+  useEffect(()=>{
+    try{localStorage.setItem("ns_custom_agents",JSON.stringify(customAgents));}
+    catch(e){console.error("Failed to persist custom agents:",e);}
+  },[customAgents]);
+  useEffect(()=>{
+    try{localStorage.setItem("ns_webhook",webhookUrl);}
+    catch(e){console.error("Failed to persist webhook URL:",e);}
+  },[webhookUrl]);
 
   const effectiveAgents=useMemo(()=>({...AGENTS,...Object.fromEntries(customAgents.map(a=>[a.name,{c:a.c,i:a.i,sys:a.sys}]))}),[customAgents]);
 
@@ -789,6 +844,7 @@ export default function App() {
     try{
       const raw=await callClaude({system:`You are an orchestrator for a multi-agent AI system. Available: ${Object.keys(effectiveAgents).join(", ")}. Pick 2-5 agents for the user's goal in execution order. Write specific instructions per agent. Respond ONLY as valid JSON: {"agents":[{"name":"AGENT_NAME","instruction":"..."}]}`,messages:[{role:"user",content:goal}],...cA});
       plan_=JSON.parse(raw.replace(/```json|```/g,"").trim());
+      if(!Array.isArray(plan_?.agents)||!plan_.agents.length)throw new Error("orchestrator returned no agents");
       addLog("Plan: "+plan_.agents.map(a=>a.name).join(parallel?" ∥ ":" → "));
     }catch(e){addLog("Orchestrator error: "+e.message);setPhase("idle");setRunning(false);return;}
     setPhase("running");
@@ -796,6 +852,7 @@ export default function App() {
     const maxTok=customMaxTok||PLAN_TOKENS[plan]||PLAN_TOKENS.free;
     const steps=plan_.agents.filter(s=>effectiveAgents[s.name]);
     const total=steps.length;
+    if(!total){addLog("Orchestrator error: none of the planned agents are known.");setPhase("idle");setRunning(false);return;}
 
     const runStep=async(step,ctxBlock,idx)=>{
       if(abortRef.current)return;
@@ -830,7 +887,7 @@ export default function App() {
         if(chainMode&&ctx.length){
           ctxBlock=`\n\n--- PRIOR AGENT OUTPUTS (build on these) ---\n${ctx.map(c=>`[${c.agent}]:\n${c.output}`).join("\n\n---\n")}`;
         } else if(ctx.length>=2){
-          ctxBlock=await compressCtx(ctx,goal,cA._key,cA._proxy,cA._jwt,cA._model,cA._geminiKey);
+          ctxBlock=await compressCtx(ctx,goal,cA._key,cA._proxy,cA._jwt,cA._model,cA._geminiKey,addLog);
         } else if(ctx.length){
           ctxBlock=`\n\nPREVIOUS OUTPUTS:\n${ctx.map(c=>`[${c.agent}]: ${c.output.slice(0,500)}`).join("\n\n")}`;
         }
@@ -845,7 +902,11 @@ export default function App() {
       onDone:async()=>{
         setRunProgress(100);addLog("Complete. ~"+totalTok+" tokens total");setPhase("done");setRunning(false);setRunCount(c=>c+1);
         if(Notification.permission==="granted")new Notification("⬡ Swarm Complete",{body:goal.slice(0,80),icon:"/icon.svg"});
-        try{const saved=JSON.parse(localStorage.getItem("ns_runs")||"[]");localStorage.setItem("ns_runs",JSON.stringify([{id:"l"+Date.now(),goal,branch,agents:finals,overseer:ov,created_at:new Date().toISOString()},...saved].slice(0,20)));}catch{ /* ignore storage errors */ }
+        try{
+          const stored=JSON.parse(localStorage.getItem("ns_runs")||"[]");
+          const saved=Array.isArray(stored)?stored:[];
+          localStorage.setItem("ns_runs",JSON.stringify([{id:"l"+Date.now(),goal,branch,agents:finals,overseer:ov,created_at:new Date().toISOString()},...saved].slice(0,20)));
+        }catch(e){addLog("Local history not saved: "+e.message);}
         await saveRun(finals,ov,totalTok);await loadRuns();
       },
       onErr:e=>{setOverseer("ERROR: "+e);setPhase("done");setRunning(false);},
@@ -853,7 +914,7 @@ export default function App() {
   },[apiKey,proxyUrl,goal,plan,isGated,saveRun,loadRuns,model,parallel,customMaxTok,branch,cA,chainMode,effectiveAgents,geminiKey,addLog]);
 
   useEffect(()=>{
-    if(Notification.permission==="default")Notification.requestPermission();
+    if(Notification.permission==="default")Notification.requestPermission().catch(e=>console.warn("Notification permission request failed:",e));
     const h=e=>{
       if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();if(!running&&goal.trim()&&(apiKey||proxyUrl))handleRun();}
       if(e.key==="Escape"&&running){abortRef.current=true;setRunning(false);setPhase("idle");}
@@ -864,8 +925,8 @@ export default function App() {
   const loadDbTpls=useCallback(async()=>{
     if(!sbUrl||!sbKey)return;
     try{const rows=await mkDb(sbUrl,sbKey).sel("templates","select=*&is_public=eq.true&order=usage_count.desc&limit=40");setDbTpls(rows);}
-    catch{ /* ignore load errors */ }
-  },[sbUrl,sbKey]);
+    catch(e){addLog("Template load error: "+e.message);}
+  },[sbUrl,sbKey,addLog]);
 
   useEffect(()=>{
     // eslint-disable-next-line react-hooks/set-state-in-effect -- async fetch on tab change, not synchronous render-phase update
@@ -892,8 +953,8 @@ export default function App() {
   const copyAll=useCallback(()=>{
     const parts=Object.entries(agOut).map(([name,out])=>`=== ${name} ===\n${out.text}`);
     if(overseer)parts.push(`=== OVERSEER ===\n${overseer}`);
-    navigator.clipboard?.writeText(parts.join("\n\n"));
-  },[agOut,overseer]);
+    copyText(parts.join("\n\n"),addLog);
+  },[agOut,overseer,addLog]);
 
   const exportGist=useCallback(async()=>{
     const md=[`# Neural Swarm Run\n**Goal:** ${goal}\n**Branch:** ${branch}\n**Date:** ${new Date().toLocaleString()}\n`,...Object.entries(agOut).map(([n,o])=>`## ${effectiveAgents[n]?.i||"⬡"} ${n}\n\`\`\`\n${o.text}\n\`\`\``),...(overseer?[`## ◈ OVERSEER\n${overseer}`]:[])].join("\n");
@@ -929,7 +990,11 @@ export default function App() {
 
   const branchFrom=run=>{setGoal(run.goal||"");setBranch("branch-"+Date.now().toString(36));setCommitMsg("Branched from v"+(run.version_num||"?"));setTab("swarm");};
   const restoreRun=run=>{setGoal(run.goal||"");setBranch(run.branch||"main");setCommitMsg("Restored v"+(run.version_num||"?"));setTab("swarm");};
-  const deleteRun=id=>{mkDb(sbUrl,sbKey).del("agent_runs",id).then(()=>setRuns(p=>p.filter(r=>r.id!==id))).catch(()=>{});};
+  const deleteRun=id=>{
+    mkDb(sbUrl,sbKey).del("agent_runs",id)
+      .then(()=>setRuns(p=>p.filter(r=>r.id!==id)))
+      .catch(e=>{addLog("Delete error: "+e.message);alert("Delete failed: "+e.message);});
+  };
 
   const handlePickDiff=run=>{
     if(!diffA)setDiffA(run);
@@ -939,7 +1004,9 @@ export default function App() {
   const handlePublish=()=>{
     if(!tplName.trim())return;
     setSavedTpls(p=>[...p,{id:"u"+Date.now(),name:tplName,goal,c:T.cyan}]);
-    if(sbUrl&&sbKey)mkDb(sbUrl,sbKey).ins("templates",{name:tplName,description:tplDesc,goal_template:goal,agent_flow:[],tags:tplTags.split(",").map(s=>s.trim()).filter(Boolean),category:tplCat,price:parseFloat(tplPrice)||0,is_public:true,creator_email:session?.email||null}).then(()=>loadDbTpls()).catch(()=>{});
+    if(sbUrl&&sbKey)mkDb(sbUrl,sbKey).ins("templates",{name:tplName,description:tplDesc,goal_template:goal,agent_flow:[],tags:tplTags.split(",").map(s=>s.trim()).filter(Boolean),category:tplCat,price:parseFloat(tplPrice)||0,is_public:true,creator_email:session?.email||null})
+      .then(()=>loadDbTpls())
+      .catch(e=>{addLog("Publish error: "+e.message);alert("Publish failed: "+e.message);});
     setTplName("");setTplDesc("");setTplPrice("0");setTplTags("");setSaveOpen(false);
   };
 
