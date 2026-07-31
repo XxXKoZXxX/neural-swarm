@@ -1,6 +1,11 @@
 import { Octokit } from "@octokit/rest";
 import { SwarmSDK } from "./src/swarm-logic.js";
 
+if (!process.env.GITHUB_TOKEN) {
+  console.error("[SENTINEL] Fatal: GITHUB_TOKEN is not set.");
+  process.exit(1);
+}
+
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 const [owner, repo] = ["XxXKoZXxX", "neural-swarm"];
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -20,8 +25,9 @@ async function getFailedLogs(runId) {
       });
       const text = typeof data === "string" ? data : JSON.stringify(data);
       logs.push(`### Job: ${job.name}\n${text.slice(-4000)}`);
-    } catch {
-      logs.push(`### Job: ${job.name}\n[Logs unavailable — check run directly]`);
+    } catch (err) {
+      console.warn(`[SENTINEL] Could not download logs for job "${job.name}": ${err.message}`);
+      logs.push(`### Job: ${job.name}\n[Logs unavailable (${err.message}) — check run directly]`);
     }
   }
 
@@ -95,6 +101,6 @@ async function healPipeline() {
 }
 
 healPipeline().catch(err => {
-  console.error("[SENTINEL] Fatal:", err.message);
+  console.error("[SENTINEL] Fatal:", err);
   process.exit(1);
 });
