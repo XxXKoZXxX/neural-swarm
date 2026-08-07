@@ -357,73 +357,180 @@ function AuthModal({sbUrl,sbKey,onSession,onSkip}) {
 }
 
 const DEMO_LINES=[
-  {c:T.dim,   t:'> dispatch "Build a production SaaS auth system"'},
-  {c:T.cyan,  t:"⬡ ORCHESTRATOR → ARCHITECT → CODER → TESTER"},
-  {c:T.cyan,  t:"⬡ ARCHITECT: Designing JWT schema + RLS policies..."},
-  {c:T.green, t:"⌨ CODER: Writing Express middleware + Supabase hooks..."},
-  {c:T.yellow,t:"✓ TESTER: Writing 14 integration test cases..."},
-  {c:T.purple,t:"◈ OVERSEER: Score 9/10 — Production ready."},
+  {c:T.dim,   t:'> mission: "Build a customer dashboard for my SaaS"'},
+  {c:T.cyan,  t:"⬡ ORCHESTRATOR: Selecting best agents for this goal..."},
+  {c:T.cyan,  t:"⬡ ARCHITECT: Creating technical plan + data model..."},
+  {c:T.pink,  t:"◉ RESEARCHER: Finding best practices + libraries..."},
+  {c:T.green, t:"⌨ CODER: Writing complete implementation..."},
+  {c:T.yellow,t:"✓ TESTER: Running 18 test cases, 0 failures..."},
+  {c:"#ff6eb4",t:"👁 REVIEWER: Security audit — all clear."},
+  {c:T.purple,t:"◈ OVERSEER: Score 9/10 — Ship it."},
+];
+const MISSION_STEPS=[
+  {i:"🧠",label:"ARCHITECT",d:"Creates the technical plan"},
+  {i:"◉",label:"RESEARCHER",d:"Finds best practices"},
+  {i:"⌨",label:"CODER",d:"Writes the implementation"},
+  {i:"✓",label:"TESTER",d:"Finds every edge case"},
+  {i:"👁",label:"REVIEWER",d:"Audits quality & security"},
+];
+const WHO=[
+  {i:"🚀",t:"Indie Hackers",d:"Launch products without hiring a full team."},
+  {i:"⌨",t:"Developers",d:"Ship faster. Debug faster. Build more."},
+  {i:"🏢",t:"Startups",d:"Your first AI employees. Ready on day one."},
+  {i:"⚡",t:"Agencies",d:"Deliver client work faster, at higher margin."},
 ];
 function Landing({onStart,onSignIn}) {
   const [tick,setTick]=useState(0);
-  useEffect(()=>{const id=setInterval(()=>setTick(t=>(t+1)%(DEMO_LINES.length+3)),700);return()=>clearInterval(id);},[]);
+  useEffect(()=>{const id=setInterval(()=>setTick(t=>(t+1)%(DEMO_LINES.length+3)),750);return()=>clearInterval(id);},[]);
   const ff="'Courier New',monospace";
-  const caps=[
-    {i:"⛓",t:"Chain Mode",d:"Sequential agents that actually collaborate — Architect's spec becomes Coder's input, which becomes Reviewer's target. Real multi-agent pipelines, not just parallel API calls.",hot:true},
-    {i:"⊕",t:"Custom Agent Builder",d:"Build your own specialists: Legal Reviewer, Brand Voice Editor, Domain Expert. Define name, icon, and system prompt. Runs in your swarm alongside the 10 built-ins.",hot:true},
-    {i:"⬡",t:"10 Specialized Agents",d:"Architect, Coder, Debugger, Tester, Analyst, Refactorer, Researcher, Writer, Reviewer, Designer — each with tuned system prompts."},
-    {i:"⟷",t:"Version Control",d:"Branch, diff, restore. Git-style history for every AI output."},
-    {i:"⚗",t:"Prompt Forge",d:`${PF_P.length*PF_T.length*PF_C.length} persona × tone × constraint combos to transform goals before dispatch.`},
-    {i:"⬆",t:"Share & Integrate",d:"Export runs as GitHub Gists with one click. Send to any webhook — Slack, Notion, Zapier, your own API."},
+  const feats=[
+    {i:"⬡",t:"Multi-Agent Intelligence",d:"10 specialists — Architect, Coder, Debugger, Tester, Analyst, Refactorer, Researcher, Writer, Reviewer, Designer. Each tuned for their role.",hot:false},
+    {i:"⛓",t:"Agent Collaboration",d:"Chain Mode: Architect's plan becomes Coder's input, which becomes Reviewer's target. Agents critique and build on each other's work.",hot:true},
+    {i:"⊕",t:"Custom Agents",d:"Build your own specialists — Legal Reviewer, Brand Voice Editor, Domain Expert. Runs alongside the 10 built-ins.",hot:true},
+    {i:"⟷",t:"Mission History",d:"Every run saved. Branch, diff, restore. Never lose context. Git-style version control for AI output.",hot:false},
+    {i:"◈",t:"Overseer Scoring",d:"After every mission, an Overseer AI evaluates all agent outputs and scores /10 with prioritized improvements.",hot:false},
+    {i:"⬆",t:"Export & Integrate",d:"One-click GitHub Gist export. Webhooks to Slack, Notion, Zapier, or any API. Your AI team fits your workflow.",hot:false},
   ];
   const plans=[
-    {n:"FREE",p:"$0",per:"forever",c:T.muted,feats:["5 runs/month","All 10 agents","Chain Mode","Custom Agents","Basic history"]},
-    {n:"PRO",p:"$29",per:"/month",c:T.cyan,hot:true,feats:["Unlimited runs","All 10 agents","Chain Mode","Custom Agents","Full history + versioning","Save & share templates","Gist & webhook export"]},
-    {n:"POWER",p:"$79",per:"/month",c:T.purple,feats:["Everything in Pro","Cost analytics","Team workspace","API access","Priority support"]},
+    {n:"FREE",p:"$0",per:"forever",c:T.muted,feats:["5 missions/month","All 10 agents","Chain Mode","Custom Agents","Basic history"],cta:null},
+    {n:"PRO",p:"$29",per:"/month",c:T.cyan,hot:true,feats:["Unlimited missions","All 10 agents","Chain Mode","Custom Agents","Full history + versioning","Save & share templates","Gist & webhook export"],cta:"START PRO →"},
+    {n:"FOUNDER",p:"$99",per:"/month",c:T.purple,feats:["Everything in Pro","Custom agents","API access","Team workspace","Advanced analytics","Priority support"],cta:"BUILD YOUR TEAM →"},
+  ];
+  const quickTpls=[
+    {label:"Build a SaaS MVP",goal:"Build a complete SaaS MVP with auth, dashboard, and billing:"},
+    {label:"Analyze competitors",goal:"Research and analyze competitors for:"},
+    {label:"Audit my codebase",goal:"Security audit and code review for:"},
+    {label:"Write a marketing kit",goal:"Write a full marketing kit for:"},
+    {label:"Debug production issue",goal:"Debug and fix this issue:\n\n"},
+    {label:"Research a business idea",goal:"Deep research and validation for this business idea:"},
   ];
   return (
     <>
     <NeuralSwarmBg/>
     <div style={{background:"transparent",color:T.text,fontFamily:ff,minHeight:"100vh"}}>
-      <nav style={{borderBottom:`1px solid ${T.border2}`,padding:"12px 40px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:"rgba(9,11,16,.96)",zIndex:50}}>
+
+      {/* NAV */}
+      <nav style={{borderBottom:`1px solid ${T.border2}`,padding:"12px 40px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:"rgba(9,11,16,.97)",zIndex:50}}>
         <div style={{color:T.cyan,fontSize:"15px",fontWeight:"bold",letterSpacing:"5px"}}>⬡ NEURAL SWARM</div>
         <div style={{display:"flex",gap:"8px"}}>
           <button onClick={onSignIn} style={{background:"none",border:`1px solid ${T.border}`,color:T.muted,padding:"6px 16px",fontFamily:ff,fontSize:"11px",letterSpacing:"2px",cursor:"pointer"}}>SIGN IN</button>
           <button onClick={onStart}  style={{background:T.cyan,border:"none",color:T.bg,padding:"6px 16px",fontFamily:ff,fontSize:"11px",letterSpacing:"2px",fontWeight:"bold",cursor:"pointer"}}>START FREE →</button>
         </div>
       </nav>
-      <section style={{padding:"60px 40px",maxWidth:"1100px",margin:"0 auto",display:"grid",gridTemplateColumns:"1fr 1fr",gap:"48px",alignItems:"center"}}>
+
+      {/* HERO */}
+      <section style={{padding:"64px 40px",maxWidth:"1100px",margin:"0 auto",display:"grid",gridTemplateColumns:"1fr 1fr",gap:"52px",alignItems:"center"}}>
         <div>
-          <div style={{color:T.cyan,fontSize:"10px",letterSpacing:"5px",marginBottom:"12px",opacity:.7}}>MULTI-AGENT AI ORCHESTRATION</div>
-          <h1 style={{fontSize:"36px",fontWeight:"bold",lineHeight:1.2,margin:"0 0 16px",color:"#fff"}}>10 AI Agents.<br/>One Goal.<br/><span style={{color:T.cyan}}>Real Collaboration.</span></h1>
-          <p style={{color:"#667",fontSize:"13px",lineHeight:1.8,marginBottom:"16px"}}>Agents don't just run in parallel — they build on each other. Architect designs, Coder implements it, Reviewer audits the code. Enable <span style={{color:T.pink}}>Chain Mode</span> and your AI team actually thinks together.</p>
-          <div style={{display:"flex",gap:"8px",flexWrap:"wrap",marginBottom:"20px"}}>
-            {["⛓ Chain Mode","⊕ Custom Agents","⬆ Gist Export","◈ Overseer Scoring"].map(f=><span key={f} style={{background:`${T.cyan}10`,border:`1px solid ${T.cyan}30`,color:T.cyan,fontSize:"10px",padding:"2px 8px",letterSpacing:"1px"}}>{f}</span>)}
+          <div style={{color:T.cyan,fontSize:"10px",letterSpacing:"5px",marginBottom:"14px",opacity:.7}}>YOUR AI ENGINEERING TEAM</div>
+          <h1 style={{fontSize:"38px",fontWeight:"bold",lineHeight:1.15,margin:"0 0 18px",color:"#fff"}}>Your AI Team<br/>That Works<br/><span style={{color:T.cyan}}>24/7.</span></h1>
+          <p style={{color:"#778",fontSize:"13px",lineHeight:1.9,marginBottom:"20px"}}>Build apps, automate workflows, solve complex problems — with a team of specialized AI agents that plan, execute, review, and improve every task. Not one chatbot guessing. <span style={{color:T.text}}>Multiple agents working together.</span></p>
+          <div style={{display:"flex",gap:"10px",marginBottom:"14px",flexWrap:"wrap"}}>
+            <button onClick={onStart} style={{background:T.cyan,border:"none",color:T.bg,padding:"12px 28px",fontFamily:ff,fontSize:"12px",letterSpacing:"3px",fontWeight:"bold",cursor:"pointer"}}>START BUILDING FREE →</button>
+            <button onClick={()=>document.getElementById("ns-pricing")?.scrollIntoView({behavior:"smooth"})} style={{background:"transparent",border:`1px solid ${T.border}`,color:T.muted,padding:"12px 20px",fontFamily:ff,fontSize:"11px",letterSpacing:"2px",cursor:"pointer"}}>SEE PRICING</button>
           </div>
-          <div style={{display:"flex",gap:"10px",marginBottom:"10px"}}>
-            <button onClick={onStart} style={{background:T.cyan,border:"none",color:T.bg,padding:"11px 26px",fontFamily:ff,fontSize:"12px",letterSpacing:"3px",fontWeight:"bold",cursor:"pointer"}}>START FREE →</button>
-            <button onClick={()=>document.getElementById("ns-pricing")?.scrollIntoView({behavior:"smooth"})} style={{background:"transparent",border:`1px solid ${T.border}`,color:T.muted,padding:"11px 20px",fontFamily:ff,fontSize:"11px",letterSpacing:"2px",cursor:"pointer"}}>PRICING</button>
-          </div>
-          <div style={{color:T.dim,fontSize:"10px"}}>No credit card · 5 free runs · Full access</div>
+          <div style={{color:T.dim,fontSize:"10px"}}>No credit card · 5 free missions · Full access</div>
         </div>
-        <div style={{background:T.bg2,border:`1px solid ${T.border}`,padding:"18px",boxShadow:`0 0 40px ${T.cyan}10`,minHeight:"170px"}}>
-          <div style={{display:"flex",gap:"5px",marginBottom:"12px"}}>
+        <div style={{background:T.bg2,border:`1px solid ${T.border}`,padding:"18px",boxShadow:`0 0 40px ${T.cyan}12`,minHeight:"200px"}}>
+          <div style={{display:"flex",gap:"5px",marginBottom:"12px",alignItems:"center"}}>
             {["#ff5f56","#ffbd2e","#27c93f"].map(c=><span key={c} style={{width:"9px",height:"9px",borderRadius:"50%",background:c,display:"inline-block"}}/>)}
-            <span style={{color:T.dim,fontSize:"10px",marginLeft:"8px",letterSpacing:"2px"}}>neural-swarm — bash</span>
+            <span style={{color:T.dim,fontSize:"10px",marginLeft:"8px",letterSpacing:"2px"}}>neural-swarm — live mission</span>
           </div>
-          {DEMO_LINES.slice(0,Math.min(tick,DEMO_LINES.length)).map((l,i)=><div key={i} style={{color:l.c,fontSize:"12px",marginBottom:"5px",lineHeight:1.5}}>{l.t}</div>)}
+          {DEMO_LINES.slice(0,Math.min(tick,DEMO_LINES.length)).map((l,i)=><div key={i} style={{color:l.c,fontSize:"12px",marginBottom:"6px",lineHeight:1.5}}>{l.t}</div>)}
           {tick<DEMO_LINES.length+1&&<span style={{color:T.cyan}}>▋</span>}
-          {tick>=DEMO_LINES.length+1&&<div style={{color:T.dim,fontSize:"10px",marginTop:"4px",opacity:.5}}>// restarting...</div>}
+          {tick>=DEMO_LINES.length+1&&<div style={{color:T.dim,fontSize:"10px",marginTop:"6px",opacity:.4}}>// mission complete — restarting demo...</div>}
         </div>
       </section>
-      <section style={{padding:"48px 40px",borderTop:`1px solid ${T.border2}`,background:T.bg2}}>
+
+      {/* PROBLEM */}
+      <section style={{padding:"52px 40px",borderTop:`1px solid ${T.border2}`,background:T.bg2}}>
+        <div style={{maxWidth:"720px",margin:"0 auto",textAlign:"center"}}>
+          <div style={{color:T.orange,fontSize:"10px",letterSpacing:"5px",marginBottom:"14px"}}>THE PROBLEM</div>
+          <h2 style={{color:"#fff",fontSize:"26px",fontWeight:"bold",marginBottom:"16px",lineHeight:1.3}}>Stop Asking AI One Question At A Time</h2>
+          <p style={{color:"#778",fontSize:"13px",lineHeight:1.9,marginBottom:"24px"}}>Most AI tools give you answers. Real work requires <span style={{color:T.text}}>research, planning, execution, testing, review, and improvement</span>. That's why projects stall. You don't need another chatbot. You need a team.</p>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"8px",maxWidth:"560px",margin:"0 auto"}}>
+            {["Research","Planning","Execution","Testing","Review","Improvement"].map(s=>(
+              <div key={s} style={{border:`1px solid ${T.border}`,background:T.bg3,padding:"8px",color:T.muted,fontSize:"10px",letterSpacing:"2px"}}>✓ {s}</div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* SOLUTION — MISSION FLOW */}
+      <section style={{padding:"52px 40px",borderTop:`1px solid ${T.border2}`}}>
+        <div style={{maxWidth:"900px",margin:"0 auto"}}>
+          <div style={{color:T.cyan,fontSize:"10px",letterSpacing:"5px",textAlign:"center",marginBottom:"12px"}}>THE SOLUTION</div>
+          <h2 style={{color:"#fff",fontSize:"26px",fontWeight:"bold",textAlign:"center",marginBottom:"8px",lineHeight:1.3}}>Meet Your AI Workforce</h2>
+          <p style={{color:"#778",fontSize:"12px",textAlign:"center",marginBottom:"36px",lineHeight:1.8}}>You give the objective. Your AI team handles the work.</p>
+          <div style={{background:T.bg2,border:`1px solid ${T.border}`,padding:"22px",marginBottom:"20px"}}>
+            <div style={{color:T.dim,fontSize:"10px",letterSpacing:"3px",marginBottom:"10px"}}>YOUR REQUEST</div>
+            <div style={{color:T.text,fontSize:"13px",fontStyle:"italic",borderLeft:`2px solid ${T.cyan}`,paddingLeft:"12px"}}>"Build a customer dashboard for my SaaS."</div>
+          </div>
+          <div style={{display:"flex",alignItems:"stretch",gap:"0",overflowX:"auto",paddingBottom:"4px"}}>
+            {MISSION_STEPS.map((s,i)=>(
+              <div key={s.label} style={{display:"flex",alignItems:"center",flex:1,minWidth:"140px"}}>
+                <div style={{flex:1,border:`1px solid ${T.border}`,background:T.bg3,padding:"14px",textAlign:"center"}}>
+                  <div style={{fontSize:"20px",marginBottom:"5px"}}>{s.i}</div>
+                  <div style={{color:T.cyan,fontSize:"10px",letterSpacing:"2px",marginBottom:"3px"}}>{s.label}</div>
+                  <div style={{color:T.muted,fontSize:"10px",lineHeight:1.5}}>{s.d}</div>
+                </div>
+                {i<MISSION_STEPS.length-1&&<div style={{color:T.border,fontSize:"18px",padding:"0 4px",flexShrink:0}}>→</div>}
+              </div>
+            ))}
+          </div>
+          <div style={{border:`1px solid ${T.green}`,background:`${T.green}08`,padding:"14px",marginTop:"12px",display:"flex",alignItems:"center",gap:"12px",boxShadow:`0 0 16px ${T.green}12`}}>
+            <div style={{color:T.green,fontSize:"22px"}}>✅</div>
+            <div>
+              <div style={{color:T.green,fontSize:"11px",letterSpacing:"2px",marginBottom:"2px"}}>FINAL RESULT</div>
+              <div style={{color:T.muted,fontSize:"11px"}}>A completed, reviewed, improved solution — with a score from the Overseer.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* MEMORY */}
+      <section style={{padding:"52px 40px",borderTop:`1px solid ${T.border2}`,background:T.bg2}}>
+        <div style={{maxWidth:"820px",margin:"0 auto",display:"grid",gridTemplateColumns:"1fr 1fr",gap:"48px",alignItems:"center"}}>
+          <div>
+            <div style={{color:T.yellow,fontSize:"10px",letterSpacing:"5px",marginBottom:"12px"}}>MISSION HISTORY</div>
+            <h2 style={{color:"#fff",fontSize:"24px",fontWeight:"bold",marginBottom:"14px",lineHeight:1.3}}>AI That Remembers Its Work</h2>
+            <p style={{color:"#778",fontSize:"12px",lineHeight:1.9,marginBottom:"16px"}}>Most AI conversations disappear. Neural Swarm creates a full history of every mission — decisions made, code written, agent performance, and improvements over time.</p>
+            <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
+              {["Decisions made","Code & outputs created","Agent performance scores","Previous versions restored","Branch & diff comparisons"].map(f=>(
+                <div key={f} style={{display:"flex",alignItems:"center",gap:"8px",color:T.muted,fontSize:"11px"}}><span style={{color:T.green}}>✓</span>{f}</div>
+              ))}
+            </div>
+          </div>
+          <div style={{border:`1px solid ${T.border}`,background:T.bg3,padding:"16px"}}>
+            <div style={{color:T.dim,fontSize:"10px",letterSpacing:"3px",marginBottom:"12px"}}>MISSION LOG</div>
+            {[
+              {goal:"Build SaaS auth system",branch:"main",v:"v3",score:"9/10",c:T.green},
+              {goal:"Customer dashboard UI",branch:"feature/dash",v:"v2",score:"8/10",c:T.cyan},
+              {goal:"Stripe billing integration",branch:"billing",v:"v1",score:"7/10",c:T.yellow},
+            ].map(r=>(
+              <div key={r.goal} style={{border:`1px solid ${T.border}`,background:T.bg,padding:"8px",marginBottom:"6px"}}>
+                <div style={{color:T.text,fontSize:"11px",marginBottom:"3px"}}>{r.goal}</div>
+                <div style={{display:"flex",gap:"10px"}}>
+                  <span style={{color:T.cyan,fontSize:"10px"}}>⎇ {r.branch}</span>
+                  <span style={{color:T.dim,fontSize:"10px"}}>{r.v}</span>
+                  <span style={{color:r.c,fontSize:"10px"}}>★ {r.score}</span>
+                </div>
+              </div>
+            ))}
+            <div style={{color:T.dim,fontSize:"10px",textAlign:"center",marginTop:"8px",opacity:.5}}>// think GitHub for AI employees</div>
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURES */}
+      <section style={{padding:"52px 40px",borderTop:`1px solid ${T.border2}`}}>
         <div style={{maxWidth:"1100px",margin:"0 auto"}}>
-          <div style={{color:T.dim,fontSize:"10px",letterSpacing:"5px",textAlign:"center",marginBottom:"32px"}}>CAPABILITIES</div>
+          <div style={{color:T.dim,fontSize:"10px",letterSpacing:"5px",textAlign:"center",marginBottom:"10px"}}>EVERYTHING YOU NEED</div>
+          <h2 style={{color:"#fff",fontSize:"24px",fontWeight:"bold",textAlign:"center",marginBottom:"32px"}}>Built to ship faster</h2>
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"12px"}}>
-            {caps.map(f=>(
-              <div key={f.t} style={{border:`1px solid ${f.hot?T.pink:T.border}`,background:f.hot?`${T.pink}07`:T.bg,padding:"16px",position:"relative",boxShadow:f.hot?`0 0 14px ${T.pink}15`:"none"}}>
+            {feats.map(f=>(
+              <div key={f.t} style={{border:`1px solid ${f.hot?T.pink:T.border}`,background:f.hot?`${T.pink}07`:T.bg3,padding:"16px",position:"relative",boxShadow:f.hot?`0 0 14px ${T.pink}12`:"none"}}>
                 {f.hot&&<div style={{position:"absolute",top:"-9px",right:"10px",background:T.pink,color:T.bg,fontSize:"8px",letterSpacing:"2px",padding:"1px 7px",fontWeight:"bold"}}>NEW</div>}
-                <div style={{color:f.hot?T.pink:T.cyan,fontSize:"18px",marginBottom:"7px"}}>{f.i}</div>
+                <div style={{color:f.hot?T.pink:T.cyan,fontSize:"18px",marginBottom:"8px"}}>{f.i}</div>
                 <div style={{color:T.text,fontSize:"12px",fontWeight:"bold",marginBottom:"5px"}}>{f.t}</div>
                 <div style={{color:T.muted,fontSize:"10px",lineHeight:1.6}}>{f.d}</div>
               </div>
@@ -431,28 +538,74 @@ function Landing({onStart,onSignIn}) {
           </div>
         </div>
       </section>
-      <section id="ns-pricing" style={{padding:"48px 40px",borderTop:`1px solid ${T.border2}`}}>
+
+      {/* WHO IT'S FOR */}
+      <section style={{padding:"52px 40px",borderTop:`1px solid ${T.border2}`,background:T.bg2}}>
         <div style={{maxWidth:"820px",margin:"0 auto"}}>
-          <div style={{color:T.dim,fontSize:"10px",letterSpacing:"5px",textAlign:"center",marginBottom:"8px"}}>PRICING</div>
-          <div style={{color:T.muted,fontSize:"12px",textAlign:"center",marginBottom:"28px"}}>Start free. Upgrade when you need more.</div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"12px"}}>
-            {plans.map(pl=>(
-              <div key={pl.n} style={{border:`1px solid ${pl.hot?pl.c:T.border}`,background:pl.hot?`${pl.c}08`:T.bg3,padding:"18px",position:"relative",boxShadow:pl.hot?`0 0 20px ${pl.c}15`:"none"}}>
-                {pl.hot&&<div style={{position:"absolute",top:"-10px",left:"50%",transform:"translateX(-50%)",background:pl.c,color:T.bg,fontSize:"9px",letterSpacing:"2px",padding:"2px 10px",fontWeight:"bold"}}>POPULAR</div>}
-                <div style={{color:pl.c,fontSize:"10px",letterSpacing:"3px",marginBottom:"5px"}}>{pl.n}</div>
-                <div style={{display:"flex",alignItems:"baseline",gap:"4px",marginBottom:"12px"}}><span style={{color:"#fff",fontSize:"22px",fontWeight:"bold"}}>{pl.p}</span><span style={{color:T.muted,fontSize:"11px"}}>{pl.per}</span></div>
-                {pl.feats.map(f=><div key={f} style={{color:T.muted,fontSize:"10px",marginBottom:"4px"}}>✓ {f}</div>)}
-                {pl.n!=="FREE"&&<button onClick={onStart} style={{...Btn(pl.c),width:"100%",marginTop:"12px",padding:"6px",fontSize:"10px"}}>GET STARTED →</button>}
+          <div style={{color:T.dim,fontSize:"10px",letterSpacing:"5px",textAlign:"center",marginBottom:"10px"}}>WHO IT'S FOR</div>
+          <h2 style={{color:"#fff",fontSize:"24px",fontWeight:"bold",textAlign:"center",marginBottom:"28px"}}>Built for people who need more done</h2>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:"12px"}}>
+            {WHO.map(w=>(
+              <div key={w.t} style={{border:`1px solid ${T.border}`,background:T.bg,padding:"18px",display:"flex",gap:"14px",alignItems:"flex-start"}}>
+                <div style={{fontSize:"22px",flexShrink:0}}>{w.i}</div>
+                <div>
+                  <div style={{color:T.text,fontSize:"12px",fontWeight:"bold",marginBottom:"4px"}}>{w.t}</div>
+                  <div style={{color:T.muted,fontSize:"11px",lineHeight:1.6}}>{w.d}</div>
+                </div>
               </div>
             ))}
           </div>
         </div>
       </section>
-      <section style={{padding:"48px 40px",borderTop:`1px solid ${T.border2}`,textAlign:"center"}}>
-        <div style={{color:"#fff",fontSize:"20px",fontWeight:"bold",marginBottom:"18px"}}>Ready to ship faster?</div>
-        <button onClick={onStart} style={{background:T.cyan,border:"none",color:T.bg,padding:"13px 36px",fontFamily:ff,fontSize:"12px",letterSpacing:"3px",fontWeight:"bold",cursor:"pointer"}}>LAUNCH THE SWARM →</button>
-        <div style={{color:T.dim,fontSize:"10px",marginTop:"10px"}}>No credit card · 5 free runs</div>
+
+      {/* TEMPLATES — GROWTH HACK */}
+      <section style={{padding:"52px 40px",borderTop:`1px solid ${T.border2}`}}>
+        <div style={{maxWidth:"900px",margin:"0 auto"}}>
+          <div style={{color:T.cyan,fontSize:"10px",letterSpacing:"5px",textAlign:"center",marginBottom:"10px"}}>QUICK START</div>
+          <h2 style={{color:"#fff",fontSize:"24px",fontWeight:"bold",textAlign:"center",marginBottom:"8px"}}>Don't start from a blank canvas</h2>
+          <p style={{color:"#778",fontSize:"12px",textAlign:"center",marginBottom:"28px"}}>Pick a mission template and your AI team gets to work immediately.</p>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px"}}>
+            {quickTpls.map(t=>(
+              <button key={t.label} onClick={onStart} style={{border:`1px solid ${T.border}`,background:T.bg3,padding:"14px",textAlign:"left",cursor:"pointer",fontFamily:ff,transition:"border-color .15s"}}
+                onMouseEnter={e=>e.currentTarget.style.borderColor=T.cyan}
+                onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
+                <div style={{color:T.cyan,fontSize:"16px",marginBottom:"6px"}}>→</div>
+                <div style={{color:T.text,fontSize:"11px",fontWeight:"bold"}}>{t.label}</div>
+              </button>
+            ))}
+          </div>
+        </div>
       </section>
+
+      {/* PRICING */}
+      <section id="ns-pricing" style={{padding:"52px 40px",borderTop:`1px solid ${T.border2}`,background:T.bg2}}>
+        <div style={{maxWidth:"860px",margin:"0 auto"}}>
+          <div style={{color:T.dim,fontSize:"10px",letterSpacing:"5px",textAlign:"center",marginBottom:"10px"}}>PRICING</div>
+          <h2 style={{color:"#fff",fontSize:"24px",fontWeight:"bold",textAlign:"center",marginBottom:"8px"}}>Start building your AI team</h2>
+          <p style={{color:"#778",fontSize:"12px",textAlign:"center",marginBottom:"28px"}}>Start free. Pay when it pays for itself.</p>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"12px"}}>
+            {plans.map(pl=>(
+              <div key={pl.n} style={{border:`1px solid ${pl.hot?pl.c:T.border}`,background:pl.hot?`${pl.c}08`:T.bg3,padding:"20px",position:"relative",boxShadow:pl.hot?`0 0 24px ${pl.c}15`:"none"}}>
+                {pl.hot&&<div style={{position:"absolute",top:"-10px",left:"50%",transform:"translateX(-50%)",background:pl.c,color:T.bg,fontSize:"9px",letterSpacing:"2px",padding:"2px 12px",fontWeight:"bold"}}>MOST POPULAR</div>}
+                <div style={{color:pl.c,fontSize:"10px",letterSpacing:"3px",marginBottom:"6px"}}>{pl.n}</div>
+                <div style={{display:"flex",alignItems:"baseline",gap:"4px",marginBottom:"14px"}}><span style={{color:"#fff",fontSize:"26px",fontWeight:"bold"}}>{pl.p}</span><span style={{color:T.muted,fontSize:"11px"}}>{pl.per}</span></div>
+                {pl.feats.map(f=><div key={f} style={{color:T.muted,fontSize:"10px",marginBottom:"5px",lineHeight:1.5}}>✓ {f}</div>)}
+                {pl.cta&&<button onClick={onStart} style={{...Btn(pl.c),width:"100%",marginTop:"14px",padding:"8px",fontSize:"10px"}}>{pl.cta}</button>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FINAL CTA */}
+      <section style={{padding:"64px 40px",borderTop:`1px solid ${T.border2}`,textAlign:"center"}}>
+        <div style={{color:T.dim,fontSize:"10px",letterSpacing:"5px",marginBottom:"14px"}}>STOP WORKING ALONE</div>
+        <h2 style={{color:"#fff",fontSize:"28px",fontWeight:"bold",marginBottom:"10px",lineHeight:1.3}}>The future isn't one AI assistant.<br/>It's an AI team.</h2>
+        <p style={{color:"#778",fontSize:"13px",marginBottom:"28px"}}>Build yours today.</p>
+        <button onClick={onStart} style={{background:T.cyan,border:"none",color:T.bg,padding:"14px 40px",fontFamily:ff,fontSize:"12px",letterSpacing:"3px",fontWeight:"bold",cursor:"pointer"}}>START YOUR FIRST MISSION →</button>
+        <div style={{color:T.dim,fontSize:"10px",marginTop:"12px"}}>No credit card · 5 free missions · Full access</div>
+      </section>
+
       <footer style={{borderTop:`1px solid ${T.border2}`,padding:"20px 40px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:"10px"}}>
         <div style={{color:T.dim,fontSize:"10px",letterSpacing:"2px"}}>© 2026 NEURAL SWARM</div>
         <div style={{display:"flex",gap:"20px"}}>
