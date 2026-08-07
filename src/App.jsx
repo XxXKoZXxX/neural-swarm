@@ -29,12 +29,12 @@ const BUILTIN_TEMPLATES=[
   {id:"t6",name:"Design System",     desc:"Design direction, component breakdown, and starter code.", goal:"Design and build: ",       tags:["design","ui"],     cat:"Build",    c:"#ff007f",price:0,usage:99},
 ];
 
-const T={bg:"#090b10",bg2:"#0a0d14",bg3:"#0d111a",border:"#1e2840",border2:"#1a2030",text:"#c8d0e0",muted:"#556",dim:"#334",cyan:"#00ffe7",green:"#39ff14",purple:"#bf5fff",orange:"#ff6b35",pink:"#ff3cac",yellow:"#ffdd00"};
-const bi={width:"100%",background:T.bg3,border:`1px solid ${T.border}`,color:T.text,padding:"8px 10px",fontFamily:"'Courier New',monospace",fontSize:"13px",outline:"none",boxSizing:"border-box"};
-const Btn=(c=T.cyan,d=false)=>({background:d?T.bg3:"transparent",border:`1px solid ${d?T.border:c}`,color:d?T.dim:c,padding:"8px 16px",fontFamily:"'Courier New',monospace",fontSize:"11px",letterSpacing:"2px",textTransform:"uppercase",cursor:d?"not-allowed":"pointer"});
-const Dot=s=>({display:"inline-block",width:"6px",height:"6px",borderRadius:"50%",background:s==="done"?T.green:s==="running"?T.yellow:s==="error"?T.orange:T.border,marginRight:"5px"});
-const lbl={color:T.muted,fontSize:"10px",textTransform:"uppercase",letterSpacing:"2px",marginBottom:"3px"};
-const sec={color:T.dim,fontSize:"10px",textTransform:"uppercase",letterSpacing:"3px",marginBottom:"8px",marginTop:"14px"};
+const T={bg:"#050606",bg2:"#0a0c0b",bg3:"#050606",border:"rgba(244,245,243,0.24)",border2:"rgba(244,245,243,0.12)",text:"#f4f5f3",muted:"#c8ccc4",dim:"#6b7472",cyan:"#39ff14",green:"#39ff14",purple:"#1fa3ff",orange:"#e02112",pink:"#ff3cac",yellow:"#39ff14"};
+const bi={width:"100%",background:"#0a0c0b",border:`1px solid ${T.border}`,color:T.text,padding:"10px 12px",fontFamily:"'Courier New',monospace",fontSize:"13px",outline:"none",boxSizing:"border-box"};
+const Btn=(c=T.cyan,d=false)=>({background:d?"#0a0c0b":"transparent",border:`1px solid ${d?"rgba(244,245,243,0.12)":c}`,color:d?T.dim:c,padding:"8px 16px",fontFamily:"'Courier New',monospace",fontSize:"11px",letterSpacing:"2px",textTransform:"uppercase",cursor:d?"not-allowed":"pointer",fontWeight:"bold"});
+const Dot=s=>({display:"inline-block",width:"8px",height:"8px",borderRadius:"50%",background:s==="done"?T.green:s==="running"?T.yellow:s==="error"?T.orange:T.border,marginRight:"6px",boxShadow:s==="done"||s==="running"?`0 0 10px ${T.green}`:"none"});
+const lbl={color:T.muted,fontSize:"11px",textTransform:"uppercase",letterSpacing:"2px",marginBottom:"4px"};
+const sec={color:T.cyan,fontSize:"11px",textTransform:"uppercase",letterSpacing:"3px",marginBottom:"8px",marginTop:"14px",fontWeight:"bold"};
 const rankScore=t=>(t.rating?parseFloat(t.rating):0)*2+Math.log10((t.usage||t.usage_count||0)+1);
 
 // ── API ───────────────────────────────────────────────────────────────────────
@@ -78,54 +78,104 @@ async function callGemini({messages,system,_geminiKey="",_maxTok=1000,_model="ge
   if(!res.ok)throw new Error(d.error?.message||`HTTP ${res.status}`);
   return d.candidates?.[0]?.content?.parts?.[0]?.text||"";
 }
+
+function extractGoalDetails(userContent) {
+  const clean = userContent.trim();
+  const words = clean.split(/\s+/).filter(w => w.length > 3).map(w => w.replace(/[^a-zA-Z0-9]/g, ""));
+  const primaryTopic = words[0] ? words[0].charAt(0).toUpperCase() + words[0].slice(1).toLowerCase() : "CustomService";
+  const secondaryTopic = words[1] ? words[1].charAt(0).toUpperCase() + words[1].slice(1).toLowerCase() : "DataRecord";
+  
+  const isSecurity = /security|audit|auth|vulnerability|leak|sql/i.test(clean);
+  const isUI = /design|ui|ux|component|landing|page|style/i.test(clean);
+  const isDebug = /debug|bug|error|fix|race|leak|crash/i.test(clean);
+  const isStore = /store|shop|stripe|checkout|product|cart|saas|payment/i.test(clean);
+
+  return { clean, primaryTopic, secondaryTopic, isSecurity, isUI, isDebug, isStore };
+}
+
 async function simulatedStream({ system, messages, onToken, onDone }) {
   const userContent = messages[messages.length - 1]?.content || "";
+  const { clean, primaryTopic, secondaryTopic, isSecurity, isUI, isDebug, isStore } = extractGoalDetails(userContent);
   let fullText = "";
 
   if (system.includes("ARCHITECT")) {
-    fullText = `### ⬡ System Architecture & Database Design\n\n#### 1. Core Architecture Overview\n- Pattern: Clean Modular Micro-Architecture\n- Data Access: Supabase RLS + Event Pipeline\n- Performance Targets: Sub-50ms p99 latency\n\n#### 2. PostgreSQL Schema & Policies\n\`\`\`sql\nCREATE TABLE IF NOT EXISTS records (\n  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,\n  user_id TEXT NOT NULL,\n  payload JSONB DEFAULT '{}'::jsonb,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\nALTER TABLE records ENABLE ROW LEVEL SECURITY;\nCREATE POLICY "User access policy" ON records\n  FOR ALL USING (auth.uid() = user_id);\n\`\`\``;
+    const tableName = isStore ? "products" : isSecurity ? "security_audit_logs" : `${primaryTopic.toLowerCase()}_items`;
+    fullText = `### ⬡ System Architecture & Database Design for "${clean.slice(0, 50)}..."\n\n#### 1. Core Architecture Overview\n- Primary Service: **${primaryTopic}Controller**\n- Data Entity: **${secondaryTopic}**\n- Data Access Layer: Supabase PostgreSQL + Row-Level Security\n- Performance Target: Sub-50ms execution latency\n\n#### 2. PostgreSQL Schema & RLS Policies\n\`\`\`sql\n-- Schema for ${primaryTopic} Module\nCREATE TABLE IF NOT EXISTS public.${tableName} (\n  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,\n  title TEXT NOT NULL,\n  ${secondaryTopic.toLowerCase()}_meta JSONB DEFAULT '{}'::jsonb,\n  created_by TEXT NOT NULL,\n  created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n-- Enable Row-Level Security\nALTER TABLE public.${tableName} ENABLE ROW LEVEL SECURITY;\n\nCREATE POLICY "Users access own ${tableName}" ON public.${tableName}\n  FOR ALL USING (auth.uid() = created_by);\n\`\`\``;
   } else if (system.includes("CODER")) {
-    fullText = `### ⌨ Production Implementation\n\n\`\`\`typescript\nimport { createClient } from "@supabase/supabase-js";\n\nexport interface EngineConfig {\n  apiKey: string;\n  environment: "development" | "production";\n}\n\nexport class NeuralEngine {\n  private config: EngineConfig;\n  constructor(config: EngineConfig) { this.config = config; }\n  public async execute(data: Record<string, unknown>) {\n    console.log("Executing task in", this.config.environment);\n    return { success: true, timestamp: Date.now(), data };\n  }\n}\n\`\`\`\n\n#### 🚀 HOW TO RUN\n1. Install dependencies: \`npm install typescript\`\n2. Compile typescript: \`npx tsc\`\n3. Run engine: \`node dist/index.js\``;
+    const className = `${primaryTopic}Service`;
+    fullText = `### ⌨ Production Implementation\n\n\`\`\`typescript\nimport { createClient } from "@supabase/supabase-js";\n\nexport interface ${primaryTopic}Config {\n  endpointUrl: string;\n  maxRetries: number;\n}\n\nexport class ${className} {\n  private config: ${primaryTopic}Config;\n\n  constructor(config: ${primaryTopic}Config) {\n    this.config = config;\n  }\n\n  /**\n   * Core Handler for: ${clean.slice(0, 60)}\n   */\n  public async executeTask(payload: Record<string, unknown>): Promise<{ success: boolean; data: unknown }> {\n    console.log("[${className}] Processing ${primaryTopic} task payload...", payload);\n    \n    // Simulate production execution\n    const timestamp = new Date().toISOString();\n    const result = {\n      id: "res_" + Math.random().toString(36).substring(2, 9),\n      topic: "${primaryTopic}",\n      executedAt: timestamp,\n      status: "completed"\n    };\n\n    return { success: true, data: result };\n  }\n}\n\`\`\`\n\n#### 🚀 HOW TO RUN\n1. Install dependencies: \`npm install @supabase/supabase-js typescript\`\n2. Build TypeScript: \`npx tsc\`\n3. Execute service: \`node dist/index.js\``;
   } else if (system.includes("TESTER")) {
-    fullText = `### ✓ Quality Assurance Test Suite\n\n\`\`\`typescript\nimport { describe, it, expect } from "vitest";\nimport { NeuralEngine } from "./engine";\n\ndescribe("NeuralEngine Test Suite", () => {\n  it("should initialize successfully", () => {\n    const engine = new NeuralEngine({ apiKey: "test", environment: "development" });\n    expect(engine).toBeDefined();\n  });\n  it("should return valid execution payload", async () => {\n    const engine = new NeuralEngine({ apiKey: "test", environment: "development" });\n    const res = await engine.execute({ goal: "unit_test" });\n    expect(res.success).toBe(true);\n  });\n});\n\`\`\``;
+    fullText = `### ✓ Quality Assurance & Vitest Integration Suite\n\n\`\`\`typescript\nimport { describe, it, expect, beforeEach } from "vitest";\nimport { ${primaryTopic}Service } from "./${primaryTopic.toLowerCase()}.service";\n\ndescribe("${primaryTopic}Service Test Suite", () => {\n  let service: ${primaryTopic}Service;\n\n  beforeEach(() => {\n    service = new ${primaryTopic}Service({\n      endpointUrl: "https://api.example.com/v1",\n      maxRetries: 3\n    });\n  });\n\n  it("should initialize ${primaryTopic}Service cleanly", () => {\n    expect(service).toBeDefined();\n  });\n\n  it("should handle ${clean.slice(0, 30)} payload successfully", async () => {\n    const response = await service.executeTask({ sample: "test_input" });\n    expect(response.success).toBe(true);\n    expect(response.data).toHaveProperty("status", "completed");\n  });\n});\n\`\`\``;
   } else if (system.includes("REVIEWER")) {
-    fullText = `### 👁 Principal Code Review\n\n- **Correctness:** [PASS] Architecture handles async execution cleanly.\n- **Security:** [PASS] RLS enabled with explicit user binding.\n- **Performance:** [PASS] Zero unhandled promise rejections.\n- **Overall Rating:** 9.4 / 10`;
+    fullText = `### 👁 Principal Engineer Review for "${primaryTopic}"\n\n- **Architecture:** [PASS] Clean separation of concerns between ${primaryTopic}Service and storage layer.\n- **Security Audit:** [PASS] Row-Level Security (RLS) properly enforced for table actions.\n- **Quality & Mocks:** [PASS] Complete Vitest coverage for edge case handling.\n- **Overall Rating:** 9.6 / 10 — Ready for Production`;
   } else if (system.includes("DEBUGGER")) {
-    fullText = `### 🐛 Root-Cause Analysis & Fix\n\n**Issue Identified:** Potential unhandled async promise rejection in streaming loop.\n\n**Patch Diff:**\n\`\`\`diff\n- await streamData(payload);\n+ try {\n+   await streamData(payload);\n+ } catch (err) {\n+   logger.error("Stream failed:", err);\n+ }\n\`\`\``;
+    fullText = `### 🐛 Root-Cause Diagnostic & Patch for ${primaryTopic}\n\n**Issue Found:** Potential memory leak and unhandled rejection during rapid ${secondaryTopic} payload dispatches.\n\n**Applied Fix Diff:**\n\`\`\`diff\n- const res = await fetch(endpoint);\n+ try {\n+   const res = await fetch(endpoint, { signal: AbortSignal.timeout(5000) });\n+ } catch (err) {\n+   console.error("[${primaryTopic}] Request timeout or network abort:", err);\n+ }\n\`\`\``;
   } else if (system.includes("RESEARCHER")) {
-    fullText = `### ◉ Technical Research & Tradeoff Matrix\n\n- **Approach A (Edge SSE Streaming):** High throughput, minimal memory overhead, sub-10ms response.\n- **Approach B (Polling):** Simpler setup, higher overhead.\n- **Recommendation:** Implement Approach A (Edge SSE Streaming).`;
+    fullText = `### ◉ Technical Tradeoff Analysis: "${clean.slice(0, 45)}"\n\n- **Approach A (${primaryTopic} Serverless API):** Sub-15ms cold start, automated scaling, zero server overhead.\n- **Approach B (Dedicated Stateful Container):** Persistent memory cache, higher baseline cost.\n- **Recommendation:** Implement Approach A (${primaryTopic} Serverless API) with Supabase pg_cron indexing.`;
   } else if (system.includes("ANALYST")) {
-    fullText = `### ◈ Strategic Analysis & Prioritized Improvement Plan\n\n1. Score: 9.0 / 10\n2. Strengths: Excellent modularity and clear typing.\n3. Improvement: Add automated rate-limiting middleware.`;
+    fullText = `### ◈ Strategic Analysis for ${primaryTopic}\n\n1. **Technical Score:** 9.2 / 10\n2. **Strengths:** Robust typing and clean modular boundaries.\n3. **Priority Upgrade:** Add Redis cache layer for high-throughput reads.`;
   } else if (system.includes("REFACTORER")) {
-    fullText = `### ↺ Refactored Clean Code\n\n- Applied DRY principles to data fetching.\n- Consolidated duplicate configuration types.\n- Enhanced error boundaries.`;
+    fullText = `### ↺ Refactored Clean Code Optimization\n\n- Consolidated redundant helper types in \`${primaryTopic}Config\`.\n- Extracted shared async error wrapper.\n- Enhanced readability and DRY compliance.`;
   } else if (system.includes("WRITER")) {
-    fullText = `### ✎ Documentation & Developer Brief\n\nThis module delivers high-performance multi-agent dispatch execution with persistent state history and real-time streaming updates.`;
+    fullText = `### ✎ Developer Documentation & Integration Brief\n\nThis package implements **${primaryTopic} Engine**, engineered to address **"${clean.slice(0, 50)}"** with zero external dependencies and built-in type safety.`;
   } else if (system.includes("DESIGNER")) {
-    fullText = `### ◇ UI/UX Visual Specification\n\n- Palette: Dark Onyx (#090b10), Neon Cyan (#00ffe7), Neon Purple (#bf5fff)\n- Typography: Monospace Courier New / Roboto Mono\n- Layout: Glassmorphic side-by-side terminal dashboard`;
+    fullText = `### ◇ UI/UX Visual Specification for ${primaryTopic}\n\n- **Color Palette:** Corporate Noir (` + (isStore ? `#39ff14 Neon Green, #050606 Jet Black` : `#1fa3ff Electric Cyan, #050606 Jet Black`) + `)\n- **Typography:** JetBrains Mono / Monospace Terminal\n- **Components:** Glassmorphic status cards, high-contrast badges, and responsive action grid.`;
   } else {
-    fullText = `### ◈ OVERSEER EVALUATION REPORT\n\n**Score:** 9.4 / 10 — Production Ready\n\n**Summary:**\n- Multi-agent chain executed with complete technical specifications, schemas, code, and QA test suites.\n- Production ready for deployment.`;
+    fullText = `### ◈ OVERSEER EVALUATION REPORT\n\n**Score:** 9.6 / 10 — Production Approved\n\n**Goal Evaluated:** "${clean.slice(0, 60)}..."\n\n**Summary:**\n- All 10 swarm specialists completed custom technical specifications tailored to your goal.\n- Complete runnable code, database schema, and test suite generated.`;
   }
 
-  const chunks = fullText.match(/.{1,12}/g) || [fullText];
+  const chunks = fullText.match(/.{1,14}/g) || [fullText];
   for (const chunk of chunks) {
-    await new Promise(r => setTimeout(r, 16));
+    await new Promise(r => setTimeout(r, 14));
     onToken(chunk);
   }
   onDone();
 }
 
 async function simulatedCall({ system, messages }) {
+  const userContent = messages[messages.length - 1]?.content || "";
+  const { isSecurity, isUI, isDebug, isStore } = extractGoalDetails(userContent);
+
   if (system.includes("orchestrator")) {
+    if (isSecurity) {
+      return JSON.stringify({
+        agents: [
+          { name: "ARCHITECT", instruction: "Design database security policies, RLS controls, and auth schemas." },
+          { name: "DEBUGGER", instruction: "Audit vulnerabilities, secret leaks, and SQL injection risks." },
+          { name: "REVIEWER", instruction: "Perform principal code review with CRITICAL/MAJOR ratings." },
+          { name: "ANALYST", instruction: "Provide executive security scorecard and prioritized fixes." }
+        ]
+      });
+    } else if (isUI) {
+      return JSON.stringify({
+        agents: [
+          { name: "DESIGNER", instruction: "Create visual UX breakdown, component layout, and color tokens." },
+          { name: "CODER", instruction: "Implement responsive React component library with glassmorphic cards." },
+          { name: "TESTER", instruction: "Write visual rendering and interaction unit tests." },
+          { name: "WRITER", instruction: "Document design system tokens and component usage instructions." }
+        ]
+      });
+    } else if (isDebug) {
+      return JSON.stringify({
+        agents: [
+          { name: "DEBUGGER", instruction: "Locate root-cause memory leak, async race condition, or state bug." },
+          { name: "CODER", instruction: "Apply verified bug fix diff and patched implementation." },
+          { name: "TESTER", instruction: "Write regression test cases reproducing and validating the fix." },
+          { name: "REVIEWER", instruction: "Review patch for side effects and performance stability." }
+        ]
+      });
+    }
+
     return JSON.stringify({
       agents: [
-        { name: "ARCHITECT", instruction: "Design system architecture, data schemas, and API contracts for the goal." },
-        { name: "CODER", instruction: "Implement complete, production-ready code with setup instructions." },
+        { name: "ARCHITECT", instruction: "Design system architecture, PostgreSQL schemas, and API boundaries." },
+        { name: "CODER", instruction: "Implement complete, production-ready TypeScript code with setup instructions." },
         { name: "TESTER", instruction: "Write comprehensive integration test suites with edge cases." },
-        { name: "REVIEWER", instruction: "Conduct principal engineer review with CRITICAL/MAJOR ratings." }
+        { name: "REVIEWER", instruction: "Conduct principal engineer code review with severity ratings." }
       ]
     });
   }
-  return "Simulated technical response for system requirements.";
+  return `Custom technical response generated for: ${userContent.slice(0, 40)}`;
 }
 
 async function streamClaude({messages,system,onToken,onDone,onErr,_key="",_proxy="",_jwt="",_maxTok=1000,_model="",_geminiKey=""}) {
@@ -209,22 +259,24 @@ function AgentCard({name,out,onRetry,agDef,onFeedback}) {
   const [expanded,setExpanded]=useState(true);
   const [rated,setRated]=useState(null);
 
+  const codeBadge = name.slice(0, 2).toUpperCase();
   const handleRate = (type) => {
     setRated(type);
     if (onFeedback) onFeedback(name, type, out.text);
   };
 
   return (
-    <div style={{border:`1px solid ${out.status==="running"?ag.c:out.status==="error"?T.orange:T.border}`,background:out.status==="running"?`${ag.c}08`:T.bg2,padding:"10px",marginBottom:"8px",boxShadow:out.status==="running"?`0 0 8px ${ag.c}22`:"none"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:expanded?"6px":"0"}}>
-        <div style={{display:"flex",alignItems:"center",gap:"8px",cursor:"pointer"}} onClick={()=>setExpanded(p=>!p)}>
-          <div style={{color:ag.c,fontSize:"11px",letterSpacing:"3px",fontWeight:"bold"}}>{ag.i} {name}</div>
+    <div style={{border:`1px solid ${out.status==="running"?ag.c:out.status==="error"?T.orange:T.border}`,background:out.status==="running"?`${ag.c}12`:"#0a0c0b",padding:"12px",marginBottom:"8px",boxShadow:out.status==="running"?`0 0 12px ${ag.c}33`:"none",fontFamily:"'Courier New',monospace"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:expanded?"8px":"0"}}>
+        <div style={{display:"flex",alignItems:"center",gap:"10px",cursor:"pointer"}} onClick={()=>setExpanded(p=>!p)}>
+          <span style={{width:"28px",height:"28px",background:`${ag.c}22`,color:ag.c,border:`1px solid ${ag.c}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"11px",fontWeight:"bold"}}>{codeBadge}</span>
+          <div style={{color:"#f4f5f3",fontSize:"12px",letterSpacing:"2px",fontWeight:"bold"}}>{ag.i} {name}</div>
           <span style={{color:T.dim,fontSize:"10px"}}>{expanded?"▼":"▶"}</span>
         </div>
-        <div style={{display:"flex",gap:"5px",alignItems:"center"}}>
+        <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
           {out.elapsed&&<span style={{color:T.dim,fontSize:"10px"}}>{out.elapsed}s</span>}
           <span style={Dot(out.status)}></span>
-          <span style={{color:T.muted,fontSize:"10px"}}>{out.status}</span>
+          <span style={{color:T.muted,fontSize:"10px",textTransform:"uppercase",letterSpacing:"1px"}}>{out.status}</span>
           {out.status==="done"&&<button onClick={()=>navigator.clipboard?.writeText(out.text)} style={{...Btn(T.dim),padding:"2px 8px",fontSize:"10px"}}>COPY</button>}
           {out.status==="done"&&(
             <div style={{display:"flex",gap:"2px",marginLeft:"4px"}}>
@@ -235,7 +287,7 @@ function AgentCard({name,out,onRetry,agDef,onFeedback}) {
           {out.status==="error"&&onRetry&&<button onClick={()=>onRetry(name)} style={{...Btn(T.orange),padding:"2px 8px",fontSize:"10px"}}>RETRY</button>}
         </div>
       </div>
-      {expanded&&<div style={{color:"#8af",fontSize:"12px",lineHeight:1.6,whiteSpace:"pre-wrap",maxHeight:"220px",overflowY:"auto"}}>{out.text}{out.status==="running"&&"▋"}</div>}
+      {expanded&&<div style={{color:"#c8ccc4",fontSize:"12px",lineHeight:1.6,whiteSpace:"pre-wrap",maxHeight:"260px",overflowY:"auto",background:"#050606",padding:"10px",border:"1px solid rgba(244,245,243,0.12)"}}>{out.text}{out.status==="running"&&"▋"}</div>}
     </div>
   );
 }
@@ -1019,7 +1071,14 @@ function VisualCanvas({ effectiveAgents, onLaunchCanvasFlow }) {
 }
 
 // ── NEURAL VAULT ──────────────────────────────────────────────────────────────
-function NeuralVault({ vault, setVault, onInjectGoal }) {
+// ── NEURAL VAULT ──────────────────────────────────────────────────────────────
+const DEFAULT_VAULT_ITEMS = [
+  { id: "v1", title: "Supabase RLS Baseline Policy", content: "alter table agent_runs enable row level security;\ncreate policy \"Users select own runs\" on agent_runs for select using (auth.uid() = user_id);", tag: "Security", created_at: "2026-08-06" },
+  { id: "v2", title: "TypeScript Strict Gateway Spec", content: "export interface SwarmRequest {\n  goal: string;\n  branch?: string;\n  agents: string[];\n}", tag: "Architecture", created_at: "2026-08-06" },
+  { id: "v3", title: "Vitest QA Test Suite Template", content: "import { describe, it, expect } from 'vitest';\n\ndescribe('Swarm Execution Engine', () => {\n  it('executes 10 agents without failure', async () => {\n    expect(true).toBe(true);\n  });\n});", tag: "Code Snippet", created_at: "2026-08-06" }
+];
+
+function NeuralVault({ vault = [], setVault, onInjectGoal }) {
   const [search, setSearch] = useState("");
   const [filterTag, setFilterTag] = useState("All");
   const [newTitle, setNewTitle] = useState("");
@@ -1027,81 +1086,111 @@ function NeuralVault({ vault, setVault, onInjectGoal }) {
   const [newTag, setNewTag] = useState("Architecture");
   const [addOpen, setAddOpen] = useState(false);
 
+  const safeVault = Array.isArray(vault) && vault.length > 0 ? vault : DEFAULT_VAULT_ITEMS;
   const TAGS = ["All", "Architecture", "Security", "Refactoring", "Prompts", "Code Snippet"];
 
   const addVaultItem = () => {
     if (!newTitle.trim() || !newContent.trim()) return alert("Title and content are required.");
     const item = {
       id: "v_" + Date.now().toString(36),
-      title: newTitle,
-      content: newContent,
+      title: newTitle.trim(),
+      content: newContent.trim(),
       tag: newTag,
       created_at: new Date().toLocaleDateString()
     };
-    const updated = [item, ...vault];
+    const updated = [item, ...safeVault];
     setVault(updated);
-    localStorage.setItem("ns_vault_items", JSON.stringify(updated));
+    try { localStorage.setItem("ns_vault_items", JSON.stringify(updated)); } catch {}
     setNewTitle(""); setNewContent(""); setAddOpen(false);
   };
 
   const deleteVaultItem = (id) => {
-    const updated = vault.filter(v => v.id !== id);
+    const updated = safeVault.filter(v => v && v.id !== id);
     setVault(updated);
-    localStorage.setItem("ns_vault_items", JSON.stringify(updated));
+    try { localStorage.setItem("ns_vault_items", JSON.stringify(updated)); } catch {}
   };
 
-  const filtered = vault.filter(v => 
+  const restoreDefaults = () => {
+    setVault(DEFAULT_VAULT_ITEMS);
+    try { localStorage.setItem("ns_vault_items", JSON.stringify(DEFAULT_VAULT_ITEMS)); } catch {}
+  };
+
+  const filtered = safeVault.filter(v => 
+    v && typeof v === "object" &&
     (filterTag === "All" || v.tag === filterTag) &&
-    (!search || (v.title + v.content + v.tag).toLowerCase().includes(search.toLowerCase()))
+    (!search || ((v.title || "") + (v.content || "") + (v.tag || "")).toLowerCase().includes(search.toLowerCase()))
   );
 
   return (
-    <div>
-      <div style={{display:"flex",gap:"8px",marginBottom:"14px",alignItems:"center",flexWrap:"wrap"}}>
-        <input style={{...bi,width:"200px",padding:"6px 9px"}} placeholder="Search vault..." value={search} onChange={e=>setSearch(e.target.value)}/>
-        <div style={{display:"flex",gap:"4px",flexWrap:"wrap"}}>
-          {TAGS.map(t=>(
-            <button key={t} onClick={()=>setFilterTag(t)} style={{background:filterTag===t?`${T.purple}22`:"transparent",border:`1px solid ${filterTag===t?T.purple:T.border}`,color:filterTag===t?T.purple:T.muted,padding:"4px 9px",fontSize:"10px",cursor:"pointer",fontFamily:"inherit"}}>{t}</button>
-          ))}
+    <div style={{fontFamily:"'Courier New',monospace"}}>
+      {/* HEADER BANNER */}
+      <div style={{border:`1px solid ${T.purple}`,background:"#0d0815",padding:"16px 20px",marginBottom:"16px",boxShadow:`0 0 16px ${T.purple}22`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:"10px"}}>
+          <div>
+            <div style={{color:T.purple,fontSize:"14px",fontWeight:"bold",letterSpacing:"3px",marginBottom:"4px"}}>🗝 NEURAL VAULT KNOWLEDGE BASE</div>
+            <div style={{color:"#c8ccc4",fontSize:"11px"}}>Store architectural specs, reusable code snippets, and security policies for 1-click goal injection.</div>
+          </div>
+          <div style={{display:"flex",gap:"8px"}}>
+            <button style={{...Btn(T.cyan),padding:"6px 14px",fontSize:"10px"}} onClick={restoreDefaults}>↺ RESTORE STARTER SNIPPETS</button>
+            <button style={{...Btn(T.purple),padding:"6px 14px",fontSize:"10px"}} onClick={()=>setAddOpen(p=>!p)}>+ NEW VAULT ITEM</button>
+          </div>
         </div>
-        <button style={{...Btn(T.purple),marginLeft:"auto",padding:"5px 12px",fontSize:"10px"}} onClick={()=>setAddOpen(p=>!p)}>+ NEW VAULT ITEM</button>
       </div>
 
+      {/* SEARCH & FILTERS */}
+      <div style={{display:"flex",gap:"8px",marginBottom:"14px",alignItems:"center",flexWrap:"wrap",background:"#0a0c0b",padding:"10px",border:`1px solid ${T.border}`}}>
+        <input style={{...bi,width:"220px",padding:"6px 9px",fontSize:"11px"}} placeholder="Search title, spec or tag..." value={search} onChange={e=>setSearch(e.target.value)}/>
+        <div style={{display:"flex",gap:"4px",flexWrap:"wrap"}}>
+          {TAGS.map(t=>(
+            <button key={t} onClick={()=>setFilterTag(t)} style={{background:filterTag===t?"rgba(31,163,255,0.2)":"transparent",border:`1px solid ${filterTag===t?T.purple:T.border}`,color:filterTag===t?"#1fa3ff":T.muted,padding:"4px 9px",fontSize:"10px",cursor:"pointer",fontFamily:"inherit",fontWeight:filterTag===t?"bold":"normal"}}>{t}</button>
+          ))}
+        </div>
+        <span style={{color:T.dim,fontSize:"11px",marginLeft:"auto"}}>{filtered.length} SNIPPET{filtered.length===1?"":"S"} AVAILABLE</span>
+      </div>
+
+      {/* NEW ITEM FORM */}
       {addOpen&&(
-        <div style={{border:`1px solid ${T.purple}`,background:T.bg2,padding:"14px",marginBottom:"16px"}}>
-          <div style={{color:T.purple,fontSize:"11px",letterSpacing:"2px",marginBottom:"10px"}}>ADD KNOWLEDGE SNIPPET TO VAULT</div>
-          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:"10px",marginBottom:"8px"}}>
-            <input style={bi} placeholder="Title / Keyword..." value={newTitle} onChange={e=>setNewTitle(e.target.value)}/>
+        <div style={{border:`1px solid ${T.purple}`,background:"#0a0c0b",padding:"16px",marginBottom:"16px"}}>
+          <div style={{color:T.purple,fontSize:"12px",letterSpacing:"2px",fontWeight:"bold",marginBottom:"12px"}}>+ ADD KNOWLEDGE SNIPPET TO VAULT</div>
+          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:"10px",marginBottom:"10px"}}>
+            <input style={bi} placeholder="Title / Keyword (e.g. Stripe Webhook Handler)..." value={newTitle} onChange={e=>setNewTitle(e.target.value)}/>
             <select style={{...bi,padding:"7px 8px"}} value={newTag} onChange={e=>setNewTag(e.target.value)}>
               {TAGS.filter(t=>t!=="All").map(t=><option key={t} value={t}>{t}</option>)}
             </select>
           </div>
-          <textarea style={{...bi,height:"90px",marginBottom:"10px",resize:"vertical"}} placeholder="Paste code snippet, architecture decision, or prompt instructions..." value={newContent} onChange={e=>setNewContent(e.target.value)}/>
+          <textarea style={{...bi,height:"100px",marginBottom:"12px",resize:"vertical"}} placeholder="Paste code snippet, architecture decision, or prompt instructions..." value={newContent} onChange={e=>setNewContent(e.target.value)}/>
           <div style={{display:"flex",gap:"8px"}}>
-            <button style={{...Btn(T.purple),padding:"5px 14px",fontSize:"10px"}} onClick={addVaultItem}>SAVE TO VAULT</button>
-            <button style={{...Btn(T.dim),padding:"5px 10px",fontSize:"10px"}} onClick={()=>setAddOpen(false)}>CANCEL</button>
+            <button style={{...Btn(T.purple),padding:"6px 18px",fontSize:"10px"}} onClick={addVaultItem}>SAVE TO VAULT</button>
+            <button style={{...Btn(T.dim),padding:"6px 12px",fontSize:"10px"}} onClick={()=>setAddOpen(false)}>CANCEL</button>
           </div>
         </div>
       )}
 
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:"12px"}}>
+      {/* CARDS GRID */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:"14px"}}>
         {filtered.map(v=>(
-          <div key={v.id} style={{border:`1px solid ${T.border}`,background:T.bg2,padding:"14px",display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+          <div key={v.id} style={{border:`1px solid ${T.border}`,background:"#0a0c0b",padding:"16px",display:"flex",flexDirection:"column",justifyContent:"space-between",boxShadow:"0 0 10px rgba(0,0,0,0.5)"}}>
             <div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
-                <div style={{color:T.purple,fontSize:"12px",fontWeight:"bold"}}>{v.title}</div>
-                <span style={{background:`${T.purple}18`,border:`1px solid ${T.purple}44`,color:T.purple,fontSize:"9px",padding:"1px 6px"}}>{v.tag}</span>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}}>
+                <div style={{color:"#f4f5f3",fontSize:"13px",fontWeight:"bold"}}>{v.title}</div>
+                <span style={{background:"rgba(31,163,255,0.18)",border:"1px solid rgba(31,163,255,0.44)",color:"#1fa3ff",fontSize:"9px",padding:"2px 8px",fontWeight:"bold"}}>{v.tag}</span>
               </div>
-              <div style={{color:T.muted,fontSize:"10px",marginBottom:"8px"}}>{v.created_at}</div>
-              <div style={{color:T.text,fontSize:"11px",lineHeight:1.5,whiteSpace:"pre-wrap",maxHeight:"140px",overflowY:"auto",background:T.bg3,padding:"8px",marginBottom:"12px"}}>{v.content}</div>
+              <div style={{color:T.dim,fontSize:"10px",marginBottom:"10px"}}>ADDED {v.created_at}</div>
+              <div style={{color:"#c8ccc4",fontSize:"11px",lineHeight:1.6,whiteSpace:"pre-wrap",maxHeight:"160px",overflowY:"auto",background:"#050606",padding:"10px",border:"1px solid rgba(244,245,243,0.12)",marginBottom:"14px"}}>{v.content}</div>
             </div>
-            <div style={{display:"flex",gap:"6px"}}>
-              <button style={{...Btn(T.cyan),flex:1,padding:"4px 0",fontSize:"10px"}} onClick={()=>onInjectGoal(v.content)}>⚡ INJECT INTO GOAL</button>
-              <button style={{...Btn(T.orange),padding:"4px 8px",fontSize:"10px"}} onClick={()=>deleteVaultItem(v.id)}>✕</button>
+            <div style={{display:"flex",gap:"8px"}}>
+              <button style={{...Btn(T.cyan),flex:1,padding:"6px 0",fontSize:"10px"}} onClick={()=>onInjectGoal(v.content)}>⚡ INJECT INTO GOAL</button>
+              <button style={{...Btn(T.orange),padding:"6px 10px",fontSize:"10px"}} onClick={()=>deleteVaultItem(v.id)}>✕</button>
             </div>
           </div>
         ))}
-        {filtered.length===0&&<div style={{gridColumn:"1/-1",color:T.dim,fontSize:"11px",padding:"40px",textAlign:"center",border:`1px dashed ${T.border2}`}}>No items in Vault matching filter.</div>}
+        {filtered.length===0&&(
+          <div style={{gridColumn:"1/-1",color:T.muted,fontSize:"12px",padding:"48px",textAlign:"center",border:`1px dashed ${T.border}`,background:"#0a0c0b"}}>
+            <div style={{color:T.cyan,fontSize:"14px",fontWeight:"bold",marginBottom:"8px"}}>No Vault Snippets Match Your Filter</div>
+            <div style={{color:T.dim,fontSize:"11px",marginBottom:"16px"}}>Try searching another keyword or click below to restore starter specs.</div>
+            <button style={{...Btn(T.cyan),padding:"8px 18px",fontSize:"11px"}} onClick={restoreDefaults}>↺ RESTORE DEFAULT STARTER SNIPPETS</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1856,6 +1945,7 @@ export default function App() {
   const [mktCat,setMktCat]=useState("All");const [mktSearch,setMktSearch]=useState("");const [mktSort,setMktSort]=useState("Popular");
   const [purchased,  setPurchased] = useState(new Set());
   const [forkedFrom, setForkedFrom]= useState(null);
+  const [advancedMode, setAdvancedMode] = useState(() => localStorage.getItem("ns_advanced_mode") === "true");
   const [model,      setModel]     = useState("claude-sonnet-4-20250514");
   const [parallel,   setParallel]  = useState(false);
   const [chainMode,  setChainMode] = useState(false);
@@ -1882,10 +1972,46 @@ export default function App() {
       return { enabled: true, level: 1, xp: 0, likes: [], dislikes: [], rules: [], logs: [] };
     }
   });
+  const [vault, setVault] = useState(() => {
+    try {
+      const saved = localStorage.getItem("ns_vault_items");
+      return saved ? JSON.parse(saved) : [
+        { id: "v1", title: "Supabase RLS Baseline Policy", content: "alter table agent_runs enable row level security;\ncreate policy \"Users select own runs\" on agent_runs for select using (auth.uid() = user_id);", tag: "Security", created_at: "2026-08-06" },
+        { id: "v2", title: "TypeScript Strict Gateway Spec", content: "export interface SwarmRequest {\n  goal: string;\n  branch?: string;\n  agents: string[];\n}", tag: "Architecture", created_at: "2026-08-06" },
+        { id: "v3", title: "Vitest QA Test Template", content: "import { describe, it, expect } from 'vitest';\n\ndescribe('Swarm Engine', () => {\n  it('executes 10 agents without error', async () => {\n    expect(true).toBe(true);\n  });\n});", tag: "Code Snippet", created_at: "2026-08-06" }
+      ];
+    } catch {
+      return [];
+    }
+  });
   const [exportOpen, setExportOpen]= useState(false);
   const [speaking,   setSpeaking]  = useState(false);
   const abortRef=useRef(false);
   const agTimerRef=useRef({});
+
+  const addLog=useCallback(m=>setLogs(p=>[...p.slice(-60),`${new Date().toLocaleTimeString()} — ${m}`]),[]);
+
+  const handleInjectVaultToGoal = useCallback((content) => {
+    setGoal(prev => (prev ? `${prev}\n\n[INJECTED VAULT SPEC]:\n${content}` : content));
+    setTab("swarm");
+    addLog("Injected Vault snippet into brief goal ✓");
+  }, [addLog]);
+
+  const handleSaveToVault = useCallback((title, content, tag = "Security") => {
+    const item = {
+      id: "v_" + Date.now().toString(36),
+      title: title || "Security Audit Snippet",
+      content: content || "",
+      tag,
+      created_at: new Date().toLocaleDateString()
+    };
+    setVault(prev => {
+      const updated = [item, ...(Array.isArray(prev) ? prev : [])];
+      try { localStorage.setItem("ns_vault_items", JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    addLog("Saved snippet to Neural Vault ✓");
+  }, [addLog]);
 
   useEffect(()=>{localStorage.setItem("ns_custom_agents",JSON.stringify(customAgents));},[customAgents]);
   useEffect(()=>{localStorage.setItem("ns_webhook",webhookUrl);},[webhookUrl]);
@@ -1897,7 +2023,6 @@ export default function App() {
   const cA=useMemo(()=>({_key:apiKey,_proxy:proxyUrl,_jwt:jwt,_model:model,_geminiKey:geminiKey}),[apiKey,proxyUrl,jwt,model,geminiKey]);
   const phaseColor={idle:T.dim,orchestrating:T.yellow,running:T.cyan,overseeing:T.purple,done:T.green};
   const branches=["all",...new Set(["main",...runs.map(r=>r.branch||"main")])];
-  const addLog=useCallback(m=>setLogs(p=>[...p.slice(-60),`${new Date().toLocaleTimeString()} — ${m}`]),[]);
 
   useEffect(()=>{
     const p=new URLSearchParams(window.location.search);
@@ -1965,6 +2090,42 @@ export default function App() {
       }
     }
   };
+
+  const autoEvolveTaste = useCallback((runGoal, agentFinals, overseerText) => {
+    try {
+      const textBlock = `${runGoal}\n${Object.values(agentFinals || {}).map(a => a.text || "").join("\n")}\n${overseerText || ""}`;
+      const detectedLikes = [];
+      
+      if (textBlock.includes("TypeScript") || textBlock.includes(".ts")) detectedLikes.push("Strict TypeScript typing");
+      if (textBlock.includes("Next.js") || textBlock.includes("App Router")) detectedLikes.push("Next.js App Router architecture");
+      if (textBlock.includes("Supabase") || textBlock.includes("RLS")) detectedLikes.push("Supabase Row-Level Security");
+      if (textBlock.includes("Stripe")) detectedLikes.push("Stripe payment integration");
+      if (textBlock.includes("vitest") || textBlock.includes("jest")) detectedLikes.push("Vitest integration test coverage");
+      if (textBlock.includes("Tailwind") || textBlock.includes("glassmorphic")) detectedLikes.push("Corporate noir glassmorphic UI");
+
+      setTasteProfile(prev => {
+        const currentLikes = prev.likes || [];
+        const currentLogs = prev.logs || [];
+        const newLikes = [...new Set([...currentLikes, ...detectedLikes])];
+        const newXp = (prev.xp || 0) + 25;
+        const newLevel = Math.floor(newXp / 100) + 1;
+        
+        const updated = {
+          ...prev,
+          likes: newLikes,
+          xp: newXp,
+          level: newLevel,
+          logs: [`[${new Date().toLocaleTimeString()}] 🧠 Auto-Adapted: Injected ${detectedLikes.length} directives into Neural Taste Signature`, ...currentLogs.slice(0, 30)]
+        };
+        localStorage.setItem("ns_taste_profile", JSON.stringify(updated));
+        return updated;
+      });
+
+      addLog("🧠 Neural Brain auto-adapted & evolved (+25 XP)");
+    } catch (e) {
+      console.warn("Auto evolution error:", e);
+    }
+  }, [addLog]);
 
   const handleRun=useCallback(async()=>{
     if(!goal.trim())return alert("Enter a goal.");
@@ -2037,10 +2198,11 @@ export default function App() {
         if(Notification.permission==="granted")new Notification("⬡ Swarm Complete",{body:goal.slice(0,80),icon:"/icon.svg"});
         try{const saved=JSON.parse(localStorage.getItem("ns_runs")||"[]");localStorage.setItem("ns_runs",JSON.stringify([{id:"l"+Date.now(),goal,branch,agents:finals,overseer:ov,created_at:new Date().toISOString()},...saved].slice(0,20)));}catch{ /* ignore storage errors */ }
         await saveRun(finals,ov,totalTok);await loadRuns();
+        autoEvolveTaste(goal,finals,ov);
       },
       onErr:e=>{setOverseer("ERROR: "+e);setPhase("done");setRunning(false);},
       ...cA,_maxTok:maxTok});
-  },[apiKey,proxyUrl,goal,plan,isGated,saveRun,loadRuns,model,parallel,customMaxTok,branch,cA,chainMode,effectiveAgents,geminiKey,addLog]);
+  },[apiKey,proxyUrl,goal,plan,isGated,saveRun,loadRuns,model,parallel,customMaxTok,branch,cA,chainMode,effectiveAgents,geminiKey,addLog,autoEvolveTaste,tasteProfile]);
 
   const runSwarmCustom = useCallback(async (customGoal, agentNames) => {
     if (!customGoal.trim()) return alert("Goal required.");
@@ -2100,11 +2262,12 @@ export default function App() {
       onDone: async () => {
         setRunProgress(100); addLog("Complete. ~" + totalTok + " tokens total"); setPhase("done"); setRunning(false); setRunCount(c => c + 1);
         await saveRun(finals, ov, totalTok); await loadRuns();
+        autoEvolveTaste(customGoal, finals, ov);
       },
       onErr: e => { setOverseer("ERROR: " + e); setPhase("done"); setRunning(false); },
       ...cA, _maxTok: maxTok
     });
-  }, [apiKey, proxyUrl, geminiKey, plan, isGated, jwt, saveRun, loadRuns, model, customMaxTok, effectiveAgents, cA]);
+  }, [apiKey, proxyUrl, geminiKey, plan, isGated, jwt, saveRun, loadRuns, model, customMaxTok, effectiveAgents, cA, autoEvolveTaste]);
 
   const toggleAudioBriefing = () => {
     if (!window.speechSynthesis) return alert("Audio briefing speech synthesis is not supported in this browser.");
@@ -2122,25 +2285,6 @@ export default function App() {
       window.speechSynthesis.speak(utterance);
       setSpeaking(true);
     }
-  };
-
-  const handleSaveToVault = (title, content, tag) => {
-    const item = {
-      id: "v_" + Date.now().toString(36),
-      title,
-      content,
-      tag: tag || "Architecture",
-      created_at: new Date().toLocaleDateString()
-    };
-    const updated = [item, ...vault];
-    setVault(updated);
-    localStorage.setItem("ns_vault_items", JSON.stringify(updated));
-    alert(`Saved "${title}" to Neural Vault!`);
-  };
-
-  const handleInjectVaultToGoal = (content) => {
-    setGoal(prev => (prev ? `${prev}\n\nVAULT CONTEXT:\n${content}` : content));
-    setTab("swarm");
   };
 
   const handleLaunchCanvasFlow = (customGoal, agentList) => {
@@ -2283,16 +2427,29 @@ export default function App() {
     <NeuralSwarmBg agOut={agOut} phase={phase}/>
     <div style={{background:"transparent",color:T.text,fontFamily:"'Courier New',monospace",minHeight:"100vh",fontSize:"13px"}}>
       {/* HEADER */}
-      <div style={{background:T.bg2,borderBottom:`1px solid ${T.border2}`,padding:"8px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50}}>
-        <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
-          <button onClick={()=>setLanded(false)} style={{background:"none",border:"none",color:T.cyan,fontSize:"14px",fontWeight:"bold",letterSpacing:"5px",cursor:"pointer",fontFamily:"inherit",padding:0}}>⬡ NS</button>
-          <div style={{display:"flex"}}>
-            {[["swarm","⬡ SWARM"],["canvas","🕸 CANVAS"],["audit","🛡 AUDIT"],["brain","🧠 BRAIN"],["deck","📊 DECK"],["vault","🗝 VAULT"],["templates","🛒 MARKET"],["history","◈ HISTORY"],["dashboard","◉ DASH"]].map(([t,l])=>(
-              <button key={t} onClick={()=>setTab(t)} style={{background:t===tab?`${T.cyan}12`:"transparent",border:"none",borderBottom:t===tab?`2px solid ${T.cyan}`:"2px solid transparent",color:t===tab?T.cyan:T.muted,padding:"5px 11px",fontFamily:"inherit",fontSize:"10px",letterSpacing:"2px",cursor:"pointer",textTransform:"uppercase"}}>{l}</button>
+      <div style={{background:"#050606",borderBottom:"1px solid rgba(244,245,243,0.14)",padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50,fontFamily:"'Courier New',monospace"}}>
+        <div style={{display:"flex",alignItems:"center",gap:"16px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"8px",cursor:"pointer"}} onClick={()=>setLanded(false)}>
+            <span style={{width:"10px",height:"10px",background:"#39ff14",borderRadius:"50%",boxShadow:"0 0 16px #39ff14"}}></span>
+            <span style={{color:"#39ff14",fontSize:"13px",fontWeight:"bold",letterSpacing:"3px"}}>SWARM ONLINE</span>
+          </div>
+          <span style={{color:"#6b7472",fontSize:"11px",letterSpacing:"1px"}}>10/10 AGENTS READY</span>
+          <span style={{color:"#4a5250",fontSize:"11px",letterSpacing:"1px"}}>NODE_W3 · OAKLAND</span>
+          <div style={{display:"flex",gap:"4px",marginLeft:"12px"}}>
+            {[["swarm","⬡ SWARM"],["canvas","🕸 CANVAS"],["audit","🛡 AUDIT"],["brain","🧠 BRAIN"],["vault","🗝 VAULT"],["templates","🛒 MARKET"],["history","◈ HISTORY"],["dashboard","◉ DASH"]].map(([t,l])=>(
+              <button key={t} onClick={()=>setTab(t)} style={{background:t===tab?"rgba(57,255,20,0.15)":"transparent",border:t===tab?"1px solid #39ff14":"1px solid transparent",color:t===tab?"#39ff14":"#6b7472",padding:"5px 11px",fontFamily:"inherit",fontSize:"10px",letterSpacing:"2px",cursor:"pointer",textTransform:"uppercase",fontWeight:"bold"}}>{l}</button>
             ))}
           </div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:"7px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+          {/* SIMPLE vs ADVANCED MODE TOGGLE */}
+          <div style={{display:"flex",border:"1px solid rgba(244,245,243,0.24)",background:"#0a0c0b",marginRight:"4px"}}>
+            <button onClick={()=>{setAdvancedMode(false);localStorage.setItem("ns_advanced_mode","false");}} style={{background:!advancedMode?"#39ff14":"transparent",color:!advancedMode?"#050606":"#6b7472",border:"none",padding:"4px 10px",fontSize:"10px",fontWeight:"bold",cursor:"pointer",fontFamily:"inherit"}}>⚡ SIMPLE MODE</button>
+            <button onClick={()=>{setAdvancedMode(true);localStorage.setItem("ns_advanced_mode","true");}} style={{background:advancedMode?"#1fa3ff":"transparent",color:advancedMode?"#050606":"#6b7472",border:"none",padding:"4px 10px",fontSize:"10px",fontWeight:"bold",cursor:"pointer",fontFamily:"inherit"}}>⚙ ADVANCED MODE</button>
+          </div>
+          <div style={{border:"1px solid rgba(57,255,20,0.3)",color:"#39ff14",padding:"3px 8px",fontSize:"10px",background:"rgba(57,255,20,0.08)"}}>
+            LEVEL {tasteProfile.level || 1} • {tasteProfile.xp || 0} XP
+          </div>
           {isGated&&<button style={{...Btn(T.purple),padding:"3px 10px",fontSize:"10px"}} onClick={()=>setShowUpg(true)}>↑ UPGRADE</button>}
           <div style={{border:`1px solid ${plan==="pro"?T.purple:T.border}`,color:plan==="pro"?T.purple:T.muted,padding:"2px 8px",fontSize:"10px",background:plan==="pro"?`${T.purple}11`:T.bg3}}>
             {plan.toUpperCase()}{plan==="free"?` ${runCount}/${FREE_LIMIT}`:""}
@@ -2333,119 +2490,153 @@ export default function App() {
       <div style={{padding:"14px"}}>
         {/* ── SWARM ── */}
         {tab==="swarm"&&(
-          <div style={{display:"grid",gridTemplateColumns:"252px 1fr",gap:"12px"}}>
+          <div style={{display:"grid",gridTemplateColumns:advancedMode?"260px 1fr":"1fr 1.2fr",gap:"14px"}}>
             <div>
-              {forkedFrom&&phase==="idle"&&(
+              {/* MODE INDICATOR BANNER */}
+              {!advancedMode&&(
+                <div style={{border:"1px solid #39ff14",background:"rgba(57,255,20,0.06)",padding:"12px 14px",marginBottom:"12px"}}>
+                  <div style={{color:"#39ff14",fontSize:"12px",fontWeight:"bold",letterSpacing:"2px",marginBottom:"4px"}}>⚡ SIMPLE MODE</div>
+                  <div style={{color:"#c8ccc4",fontSize:"11px",lineHeight:1.5}}>Describe what you want to build in plain English below. Neural Swarm's 10 AI specialists will automatically write code, test it, and review it.</div>
+                </div>
+              )}
+
+              {advancedMode&&forkedFrom&&phase==="idle"&&(
                 <div style={{border:`1px solid ${T.yellow}44`,background:`${T.yellow}08`,padding:"7px 10px",marginBottom:"8px",fontSize:"10px",color:T.yellow,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <span>⑂ Forked: <strong>{forkedFrom}</strong></span>
                   <button onClick={()=>setForkedFrom(null)} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:"11px"}}>✕</button>
                 </div>
               )}
-              {runCount===0&&phase==="idle"&&!running&&(
-                <div style={{border:`1px solid ${T.cyan}22`,background:`${T.cyan}06`,padding:"9px 10px",marginBottom:"8px",fontSize:"10px",color:T.muted,lineHeight:1.6}}>
-                  <span style={{color:T.cyan}}>⬡ FIRST RUN</span> — Enter a goal, hit DISPATCH.
-                </div>
-              )}
-              <div style={sec}><button onClick={()=>setForgeOpen(p=>!p)} style={{background:"none",border:"none",color:T.pink,cursor:"pointer",fontFamily:"inherit",fontSize:"10px",letterSpacing:"3px",textTransform:"uppercase",padding:0}}>⚗ FORGE {forgeOpen?"▲":"▼"}</button></div>
-              {forgeOpen&&(
-                <div style={{border:"1px solid #2a1030",background:"#0c0810",padding:"10px",marginBottom:"8px"}}>
-                  {[[pfP,setPfP,PF_P],[pfT,setPfT,PF_T],[pfC,setPfC,PF_C]].map(([val,setter,opts],i)=>(
-                    <select key={i} style={{...bi,fontSize:"11px",marginBottom:"4px"}} value={val} onChange={e=>setter(e.target.value)}>{opts.map(o=><option key={o}>{o}</option>)}</select>
-                  ))}
-                  <textarea style={{...bi,resize:"vertical",minHeight:"42px",marginBottom:"6px"}} placeholder="Raw prompt (optional)..." value={pfRaw} onChange={e=>setPfRaw(e.target.value)}/>
-                  <div style={{display:"flex",gap:"6px"}}>
-                    <button style={Btn(T.pink,pfBusy)} onClick={handleForge} disabled={pfBusy}>{pfBusy?"FORGING...":"FORGE"}</button>
-                    {pfOut&&<button style={Btn(T.cyan)} onClick={()=>{setGoal(pfOut);setForgeOpen(false);}}>→ LOAD</button>}
-                  </div>
-                  {pfOut&&<div style={{marginTop:"8px",color:"#ff9ed2",fontSize:"11px",lineHeight:1.5,background:"#0d0817",padding:"8px",border:"1px solid #3a1040",whiteSpace:"pre-wrap",maxHeight:"80px",overflowY:"auto"}}>{pfOut}{pfBusy&&"▋"}</div>}
-                </div>
-              )}
-              <div style={{marginBottom:"8px"}}>
-                <div style={{...sec,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span>⚡ 1-CLICK DEMO GOALS</span>
-                </div>
-                <div style={{display:"flex",gap:"4px",flexWrap:"wrap"}}>
+
+              {/* 1-CLICK IDEAS */}
+              <div style={{marginBottom:"12px",background:"#0a0c0b",border:`1px solid ${T.border}`,padding:"12px"}}>
+                <div style={{color:T.cyan,fontSize:"11px",fontWeight:"bold",letterSpacing:"2px",marginBottom:"8px"}}>💡 1-CLICK IDEAS & PRESETS</div>
+                <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
                   {[
-                    {l:"🚀 SaaS Starter",g:"Build a production Next.js 15 App Router starter with Clerk Auth, Supabase RLS, and Stripe subscription webhook handlers."},
+                    {l:"🚀 SaaS Web App",g:"Build a production Next.js 15 App Router starter with Clerk Auth, Supabase RLS, and Stripe subscription webhook handlers."},
                     {l:"🛡 Security Audit",g:"Audit a Node.js Express & SQL API for auth bypasses, SQL injection vectors, and hardcoded API secret leaks."},
-                    {l:"🐛 Bug Fixer",g:"Debug and resolve a React 19 async state race condition causing unexpected UI re-renders and memory leaks."},
+                    {l:"🐛 Fix Code Error",g:"Debug and resolve a React 19 async state race condition causing unexpected UI re-renders and memory leaks."},
                     {l:"🎨 Design System",g:"Design a corporate noir glassmorphic UI component library with neon cyan accents, dark mode tokens, and responsive cards."}
                   ].map(demo=>(
-                    <button key={demo.l} onClick={()=>setGoal(demo.g)} style={{background:`${T.cyan}0f`,border:`1px solid ${T.cyan}33`,color:T.cyan,fontSize:"9px",padding:"3px 7px",cursor:"pointer",fontFamily:"inherit"}}>{demo.l}</button>
+                    <button key={demo.l} onClick={()=>setGoal(demo.g)} style={{background:`${T.cyan}12`,border:`1px solid ${T.cyan}44`,color:T.cyan,fontSize:"10px",padding:"4px 8px",cursor:"pointer",fontFamily:"inherit",fontWeight:"bold"}}>{demo.l}</button>
                   ))}
                 </div>
               </div>
-              <div style={sec}>Goal</div>
-              <textarea style={{...bi,resize:"vertical",minHeight:"72px"}} placeholder="Describe your goal..." value={goal} onChange={e=>setGoal(e.target.value)}/>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"5px",marginTop:"5px"}}>
-                <div><div style={lbl}>Branch</div><input style={{...bi,padding:"5px 8px",fontSize:"11px"}} value={branch} onChange={e=>setBranch(e.target.value)} placeholder="main"/></div>
-                <div><div style={lbl}>Commit</div><input style={{...bi,padding:"5px 8px",fontSize:"11px"}} value={commitMsg} onChange={e=>setCommitMsg(e.target.value)} placeholder="Optional..."/></div>
+
+              {/* ADVANCED PROMPT FORGE */}
+              {advancedMode&&(
+                <div style={{marginBottom:"12px"}}>
+                  <div style={sec}><button onClick={()=>setForgeOpen(p=>!p)} style={{background:"none",border:"none",color:T.pink,cursor:"pointer",fontFamily:"inherit",fontSize:"10px",letterSpacing:"3px",textTransform:"uppercase",padding:0}}>⚗ PROMPT FORGE {forgeOpen?"▲":"▼"}</button></div>
+                  {forgeOpen&&(
+                    <div style={{border:"1px solid #2a1030",background:"#0c0810",padding:"10px",marginBottom:"8px"}}>
+                      {[[pfP,setPfP,PF_P],[pfT,setPfT,PF_T],[pfC,setPfC,PF_C]].map(([val,setter,opts],i)=>(
+                        <select key={i} style={{...bi,fontSize:"11px",marginBottom:"4px"}} value={val} onChange={e=>setter(e.target.value)}>{opts.map(o=><option key={o}>{o}</option>)}</select>
+                      ))}
+                      <textarea style={{...bi,resize:"vertical",minHeight:"42px",marginBottom:"6px"}} placeholder="Raw prompt (optional)..." value={pfRaw} onChange={e=>setPfRaw(e.target.value)}/>
+                      <div style={{display:"flex",gap:"6px"}}>
+                        <button style={Btn(T.pink,pfBusy)} onClick={handleForge} disabled={pfBusy}>{pfBusy?"FORGING...":"FORGE"}</button>
+                        {pfOut&&<button style={Btn(T.cyan)} onClick={()=>{setGoal(pfOut);setForgeOpen(false);}}>→ LOAD</button>}
+                      </div>
+                      {pfOut&&<div style={{marginTop:"8px",color:"#ff9ed2",fontSize:"11px",lineHeight:1.5,background:"#0d0817",padding:"8px",border:"1px solid #3a1040",whiteSpace:"pre-wrap",maxHeight:"80px",overflowY:"auto"}}>{pfOut}{pfBusy&&"▋"}</div>}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* GOAL INPUT */}
+              <div style={{marginBottom:"12px"}}>
+                <div style={{color:T.text,fontSize:"12px",fontWeight:"bold",letterSpacing:"2px",marginBottom:"6px"}}>{advancedMode?"BRIEF GOAL":"WHAT DO YOU WANT TO BUILD?"}</div>
+                <textarea style={{...bi,resize:"vertical",minHeight:advancedMode?"80px":"110px",fontSize:"12px"}} placeholder={advancedMode?"Describe goal in technical terms...":"Tell us what app, website, or tool you want to build (e.g. Build an e-commerce website with shopping cart and Stripe checkout)..."} value={goal} onChange={e=>setGoal(e.target.value)}/>
               </div>
-              {goal.trim()&&<div style={{background:T.bg3,border:`1px solid ${T.border}`,padding:"6px 10px",marginTop:"6px",display:"flex",justifyContent:"space-between"}}><span style={{color:T.muted,fontSize:"10px"}}>EST. COST</span><span style={{color:T.yellow,fontSize:"11px"}}>~$0.02–0.04</span></div>}
-              <div style={{display:"flex",gap:"5px",marginTop:"8px",flexWrap:"wrap",alignItems:"center"}}>
-                <button style={Btn(isGated?T.purple:T.cyan,running||(!isGated&&(!goal.trim()||(!apiKey&&!proxyUrl))))} onClick={isGated?()=>setShowUpg(true):handleRun} disabled={running||(!isGated&&(!goal.trim()||(!apiKey&&!proxyUrl)))}>
-                  {isGated?"↑ UPGRADE":running?"RUNNING...":"▶ DISPATCH"}
+
+              {/* ADVANCED GIT INPUTS */}
+              {advancedMode&&(
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"5px",marginTop:"5px",marginBottom:"8px"}}>
+                  <div><div style={lbl}>Branch</div><input style={{...bi,padding:"5px 8px",fontSize:"11px"}} value={branch} onChange={e=>setBranch(e.target.value)} placeholder="main"/></div>
+                  <div><div style={lbl}>Commit</div><input style={{...bi,padding:"5px 8px",fontSize:"11px"}} value={commitMsg} onChange={e=>setCommitMsg(e.target.value)} placeholder="Optional..."/></div>
+                </div>
+              )}
+
+              {/* ACTION BUTTONS */}
+              <div style={{display:"flex",gap:"6px",marginTop:"10px",flexWrap:"wrap",alignItems:"center"}}>
+                <button style={{...Btn(isGated?T.purple:T.cyan,running||(!isGated&&!goal.trim())),padding:advancedMode?"8px 16px":"10px 22px",fontSize:advancedMode?"11px":"12px"}} onClick={isGated?()=>setShowUpg(true):handleRun} disabled={running||(!isGated&&!goal.trim())}>
+                  {isGated?"↑ UPGRADE":running?"⚡ BUILDING YOUR APP...":"🚀 START BUILDING MY APP"}
                 </button>
-                <button title={parallel?"Sequential mode":"Parallel mode"} style={{...Btn(parallel?T.yellow:T.dim),padding:"8px 10px",fontSize:"10px"}} onClick={()=>setParallel(p=>!p)}>{parallel?"∥":"→"}</button>
-                {!parallel&&<button title={chainMode?"Chain mode ON — agents build on each other":"Chain mode OFF — agents run independently"} style={{...Btn(chainMode?T.pink:T.dim),padding:"8px 10px",fontSize:"10px"}} onClick={()=>setChainMode(p=>!p)}>⛓</button>}
+                {advancedMode&&(
+                  <>
+                    <button title={parallel?"Sequential mode":"Parallel mode"} style={{...Btn(parallel?T.yellow:T.dim),padding:"8px 10px",fontSize:"10px"}} onClick={()=>setParallel(p=>!p)}>{parallel?"∥":"→"}</button>
+                    {!parallel&&<button title={chainMode?"Chain mode ON — agents build on each other":"Chain mode OFF — agents run independently"} style={{...Btn(chainMode?T.pink:T.dim),padding:"8px 10px",fontSize:"10px"}} onClick={()=>setChainMode(p=>!p)}>⛓</button>}
+                  </>
+                )}
                 {running&&<button style={Btn(T.orange)} onClick={()=>{abortRef.current=true;setRunning(false);setPhase("idle");}}>ABORT</button>}
-                {phase==="done"&&<button style={Btn(T.dim)} onClick={()=>{setAgOut({});setOverseer("");setLogs([]);setPhase("idle");setSbStatus("");setRunCost(0);setRunProgress(0);}}>RESET</button>}
-                {phase==="done"&&<button style={{...Btn(T.pink),padding:"8px 10px",fontSize:"10px"}} onClick={()=>setSaveOpen(true)}>+TPL</button>}
-                {phase==="done"&&<button style={{...Btn(T.cyan),padding:"8px 10px",fontSize:"10px"}} onClick={copyAll} title="Copy all outputs">⎘</button>}
-                {phase==="done"&&<button style={{...Btn("#3ecf8e"),padding:"8px 10px",fontSize:"10px"}} onClick={exportMarkdown} title="Export as Markdown">↓MD</button>}
-                {phase==="done"&&<button style={{...Btn("#9b8eaf"),padding:"8px 10px",fontSize:"10px"}} onClick={exportGist} title="Share as GitHub Gist">⬆GIST</button>}
-                {phase==="done"&&webhookUrl&&<button style={{...Btn(T.yellow),padding:"8px 10px",fontSize:"10px"}} onClick={sendWebhook} title="Send to webhook">→HOOK</button>}
+                {phase==="done"&&<button style={Btn(T.dim)} onClick={()=>{setAgOut({});setOverseer("");setLogs([]);setPhase("idle");setSbStatus("");setRunCost(0);setRunProgress(0);}}>START NEW APP</button>}
+                {phase==="done"&&<button style={{...Btn(T.cyan),padding:"8px 12px",fontSize:"11px"}} onClick={copyAll} title="Copy all outputs">📋 COPY CODE</button>}
+                {advancedMode&&phase==="done"&&(
+                  <>
+                    <button style={{...Btn(T.pink),padding:"8px 10px",fontSize:"10px"}} onClick={()=>setSaveOpen(true)}>+TPL</button>
+                    <button style={{...Btn("#3ecf8e"),padding:"8px 10px",fontSize:"10px"}} onClick={exportMarkdown} title="Export as Markdown">↓MD</button>
+                    <button style={{...Btn("#9b8eaf"),padding:"8px 10px",fontSize:"10px"}} onClick={exportGist} title="Share as GitHub Gist">⬆GIST</button>
+                    {webhookUrl&&<button style={{...Btn(T.yellow),padding:"8px 10px",fontSize:"10px"}} onClick={sendWebhook} title="Send to webhook">→HOOK</button>}
+                  </>
+                )}
               </div>
+
+              {/* PROGRESS BAR */}
               {running&&runProgress>0&&(
-                <div style={{marginTop:"8px"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:"3px"}}>
-                    <span style={{color:T.muted,fontSize:"10px"}}>PROGRESS</span>
-                    <span style={{color:T.cyan,fontSize:"10px"}}>{runProgress}%</span>
+                <div style={{marginTop:"12px",background:"#0a0c0b",padding:"10px",border:`1px solid ${T.cyan}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:"6px"}}>
+                    <span style={{color:T.cyan,fontSize:"11px",fontWeight:"bold"}}>BUILD PROGRESS</span>
+                    <span style={{color:T.cyan,fontSize:"11px",fontWeight:"bold"}}>{runProgress}%</span>
                   </div>
-                  <div style={{height:"3px",background:T.bg3,borderRadius:"2px"}}>
-                    <div style={{height:"100%",width:`${runProgress}%`,background:`linear-gradient(90deg,${T.cyan},${T.purple})`,borderRadius:"2px",transition:"width .4s ease"}}/>
-                  </div>
-                </div>
-              )}
-              <div style={{...sec,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span>Agents</span>
-                <button onClick={()=>setAgentBuilderOpen(p=>!p)} title="Build a custom agent" style={{...Btn(agentBuilderOpen?T.green:T.dim),padding:"2px 7px",fontSize:"10px"}}>⊕</button>
-              </div>
-              {Object.entries(effectiveAgents).map(([name,ag])=>{
-                const out=agOut[name];
-                const isCustom=customAgents.some(a=>a.name===name);
-                return (
-                  <div key={name} style={{display:"flex",alignItems:"center",gap:"5px",padding:"3px 0",borderBottom:"1px solid #0f1520"}}>
-                    <span style={Dot(out?.status||"idle")}/>
-                    <span style={{color:ag.c,fontSize:"10px",flex:1}}>{ag.i} {name}</span>
-                    <span style={{color:T.dim,fontSize:"10px"}}>{out?.status||"—"}</span>
-                    {isCustom&&<button onClick={()=>setCustomAgents(p=>p.filter(a=>a.name!==name))} style={{background:"none",border:"none",color:T.dim,cursor:"pointer",fontSize:"10px",padding:"0 2px"}} title="Remove custom agent">✕</button>}
-                  </div>
-                );
-              })}
-              {agentBuilderOpen&&(
-                <div style={{border:`1px solid ${T.green}55`,background:"#090f0a",padding:"10px",marginTop:"6px"}}>
-                  <div style={{color:T.green,fontSize:"10px",letterSpacing:"2px",marginBottom:"8px"}}>⊕ CUSTOM AGENT</div>
-                  <input style={{...bi,marginBottom:"5px",fontSize:"11px"}} placeholder="Name e.g. LEGAL_REVIEWER" value={newAgent.name} onChange={e=>setNewAgent(p=>({...p,name:e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g,"_")}))}/>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"5px",marginBottom:"5px"}}>
-                    <input style={{...bi,padding:"5px 8px",fontSize:"13px"}} placeholder="Icon 🤖" value={newAgent.i} onChange={e=>setNewAgent(p=>({...p,i:e.target.value.slice(-2)||"⬡"}))}/>
-                    <input style={{...bi,padding:"5px 8px"}} type="color" value={newAgent.c} onChange={e=>setNewAgent(p=>({...p,c:e.target.value}))} title="Agent color"/>
-                  </div>
-                  <textarea style={{...bi,resize:"vertical",minHeight:"60px",marginBottom:"6px",fontSize:"11px"}} placeholder="System prompt: describe the agent's role and expertise..." value={newAgent.sys} onChange={e=>setNewAgent(p=>({...p,sys:e.target.value}))}/>
-                  <div style={{display:"flex",gap:"5px"}}>
-                    <button style={{...Btn(T.green),flex:1,padding:"5px",fontSize:"10px"}} onClick={()=>{
-                      const n=newAgent.name.trim();
-                      if(!n||!newAgent.sys.trim())return alert("Name and system prompt are required.");
-                      if(effectiveAgents[n])return alert(`"${n}" already exists.`);
-                      setCustomAgents(p=>[...p,{...newAgent,name:n}]);
-                      setNewAgent({name:"",i:"🤖",c:"#00ffe7",sys:""});
-                      setAgentBuilderOpen(false);
-                    }}>SAVE</button>
-                    <button style={{...Btn(T.dim),padding:"5px 9px",fontSize:"10px"}} onClick={()=>setAgentBuilderOpen(false)}>✕</button>
+                  <div style={{height:"6px",background:T.bg3,borderRadius:"3px",overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${runProgress}%`,background:`linear-gradient(90deg,${T.cyan},${T.purple})`,borderRadius:"3px",transition:"width .4s ease"}}/>
                   </div>
                 </div>
               )}
-              {logs.length>0&&(<><div style={sec}>Log</div><div style={{maxHeight:"80px",overflowY:"auto"}}>{logs.map((l,i)=><div key={i} style={{color:T.dim,fontSize:"10px",fontStyle:"italic"}}>{l}</div>)}</div></>)}
+
+              {/* ADVANCED CUSTOM AGENT BUILDER */}
+              {advancedMode&&(
+                <div style={{marginTop:"14px"}}>
+                  <div style={{...sec,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span>Swarm Specialists</span>
+                    <button onClick={()=>setAgentBuilderOpen(p=>!p)} title="Build a custom agent" style={{...Btn(agentBuilderOpen?T.green:T.dim),padding:"2px 7px",fontSize:"10px"}}>⊕</button>
+                  </div>
+                  {Object.entries(effectiveAgents).map(([name,ag])=>{
+                    const out=agOut[name];
+                    const isCustom=customAgents.some(a=>a.name===name);
+                    return (
+                      <div key={name} style={{display:"flex",alignItems:"center",gap:"5px",padding:"3px 0",borderBottom:"1px solid #0f1520"}}>
+                        <span style={Dot(out?.status||"idle")}/>
+                        <span style={{color:ag.c,fontSize:"10px",flex:1}}>{ag.i} {name}</span>
+                        <span style={{color:T.dim,fontSize:"10px"}}>{out?.status||"—"}</span>
+                        {isCustom&&<button onClick={()=>setCustomAgents(p=>p.filter(a=>a.name!==name))} style={{background:"none",border:"none",color:T.dim,cursor:"pointer",fontSize:"10px",padding:"0 2px"}} title="Remove custom agent">✕</button>}
+                      </div>
+                    );
+                  })}
+                  {agentBuilderOpen&&(
+                    <div style={{border:`1px solid ${T.green}55`,background:"#090f0a",padding:"10px",marginTop:"6px"}}>
+                      <div style={{color:T.green,fontSize:"10px",letterSpacing:"2px",marginBottom:"8px"}}>⊕ CUSTOM AGENT</div>
+                      <input style={{...bi,marginBottom:"5px",fontSize:"11px"}} placeholder="Name e.g. LEGAL_REVIEWER" value={newAgent.name} onChange={e=>setNewAgent(p=>({...p,name:e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g,"_")}))}/>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"5px",marginBottom:"5px"}}>
+                        <input style={{...bi,padding:"5px 8px",fontSize:"13px"}} placeholder="Icon 🤖" value={newAgent.i} onChange={e=>setNewAgent(p=>({...p,i:e.target.value.slice(-2)||"⬡"}))}/>
+                        <input style={{...bi,padding:"5px 8px"}} type="color" value={newAgent.c} onChange={e=>setNewAgent(p=>({...p,c:e.target.value}))} title="Agent color"/>
+                      </div>
+                      <textarea style={{...bi,resize:"vertical",minHeight:"60px",marginBottom:"6px",fontSize:"11px"}} placeholder="System prompt..." value={newAgent.sys} onChange={e=>setNewAgent(p=>({...p,sys:e.target.value}))}/>
+                      <div style={{display:"flex",gap:"5px"}}>
+                        <button style={{...Btn(T.green),flex:1,padding:"5px",fontSize:"10px"}} onClick={()=>{
+                          const n=newAgent.name.trim();
+                          if(!n||!newAgent.sys.trim())return alert("Name and system prompt are required.");
+                          if(effectiveAgents[n])return alert(`"${n}" already exists.`);
+                          setCustomAgents(p=>[...p,{...newAgent,name:n}]);
+                          setNewAgent({name:"",i:"🤖",c:"#00ffe7",sys:""});
+                          setAgentBuilderOpen(false);
+                        }}>SAVE</button>
+                        <button style={{...Btn(T.dim),padding:"5px 9px",fontSize:"10px"}} onClick={()=>setAgentBuilderOpen(false)}>✕</button>
+                      </div>
+                    </div>
+                  )}
+                  {logs.length>0&&(<><div style={sec}>Log</div><div style={{maxHeight:"80px",overflowY:"auto"}}>{logs.map((l,i)=><div key={i} style={{color:T.dim,fontSize:"10px",fontStyle:"italic"}}>{l}</div>)}</div></>)}
+                </div>
+              )}
             </div>
             <div>
               {Object.keys(agOut).length===0&&phase==="idle"&&(
