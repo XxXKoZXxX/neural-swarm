@@ -39,7 +39,7 @@ const rankScore=t=>(t.rating?parseFloat(t.rating):0)*2+Math.log10((t.usage||t.us
 
 // ── API ───────────────────────────────────────────────────────────────────────
 const MODELS=[
-  {id:"claude-sonnet-4-20250514",  label:"Sonnet 4",         provider:"anthropic"},
+  {id:"claude-sonnet-4-6",  label:"Sonnet 4",         provider:"anthropic"},
   {id:"claude-opus-4-20250514",    label:"Opus 4",           provider:"anthropic"},
   {id:"claude-haiku-4-5-20251001", label:"Haiku 4.5",        provider:"anthropic"},
   {id:"claude-sonnet-3-7-20250219",label:"Sonnet 3.7",       provider:"anthropic"},
@@ -84,7 +84,7 @@ async function streamClaude({messages,system,onToken,onDone,onErr,_key="",_proxy
   const url=up?_proxy:"https://api.anthropic.com/v1/messages";
   const hdr=up?{"Content-Type":"application/json","Authorization":`Bearer ${_jwt||_key}`}:{"Content-Type":"application/json","x-api-key":_key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
   try {
-    const res=await fetch(url,{method:"POST",headers:hdr,body:JSON.stringify({model:_model||"claude-sonnet-4-20250514",max_tokens:_maxTok,stream:true,system,messages})});
+    const res=await fetch(url,{method:"POST",headers:hdr,body:JSON.stringify({model:_model||"claude-sonnet-4-6",max_tokens:_maxTok,stream:true,system,messages})});
     if (!res.ok) {
       const ct=res.headers.get("content-type")||"";
       const body=ct.includes("json")?(await res.json()).error?.message:await res.text();
@@ -109,7 +109,7 @@ async function callClaude({messages,system,_key="",_proxy="",_jwt="",_model="",_
   const up=!!_proxy;
   const url=up?_proxy:"https://api.anthropic.com/v1/messages";
   const hdr=up?{"Content-Type":"application/json","Authorization":`Bearer ${_jwt||_key}`}:{"Content-Type":"application/json","x-api-key":_key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
-  const res=await fetch(url,{method:"POST",headers:hdr,body:JSON.stringify({model:_model||"claude-sonnet-4-20250514",max_tokens:1000,system,messages})});
+  const res=await fetch(url,{method:"POST",headers:hdr,body:JSON.stringify({model:_model||"claude-sonnet-4-6",max_tokens:1000,system,messages})});
   const ct=res.headers.get("content-type")||"";
   if(!ct.includes("json")){const t=await res.text();throw new Error(`HTTP ${res.status}: ${t.slice(0,120)}`);}
   const d=await res.json();
@@ -711,7 +711,7 @@ export default function App() {
   const [mktCat,setMktCat]=useState("All");const [mktSearch,setMktSearch]=useState("");const [mktSort,setMktSort]=useState("Popular");
   const [purchased,  setPurchased] = useState(new Set());
   const [forkedFrom, setForkedFrom]= useState(null);
-  const [model,      setModel]     = useState("claude-sonnet-4-20250514");
+  const [model,      setModel]     = useState("claude-sonnet-4-6");
   const [parallel,   setParallel]  = useState(false);
   const [chainMode,  setChainMode] = useState(false);
   const [histSearch, setHistSearch]= useState("");
