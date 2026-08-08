@@ -1202,12 +1202,12 @@ function ExportModal({ goal, agents, model, onClose }) {
   const [copied, setCopied] = useState(false);
 
   const agentList = Object.keys(agents).length > 0 ? Object.keys(agents) : ["ARCHITECT", "CODER"];
-  const sanitizedGoal = (goal || "Build a streaming API gateway").replace(/"/g, '\\"');
+  const goalLiteral = JSON.stringify(goal || "Build a streaming API gateway");
 
   const nodeScript = `import Anthropic from "@anthropic-ai/sdk";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const goal = "${sanitizedGoal}";
+const goal = ${goalLiteral};
 const agents = ${JSON.stringify(agentList)};
 
 async function runSwarm() {
