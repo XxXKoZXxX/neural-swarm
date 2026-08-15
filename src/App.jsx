@@ -379,7 +379,7 @@ const WHO=[
   {i:"🏢",t:"Startups",d:"Your first AI employees. Ready on day one."},
   {i:"⚡",t:"Agencies",d:"Deliver client work faster, at higher margin."},
 ];
-function Landing({onStart,onSignIn}) {
+function Landing({onStart,onStartWithGoal,onSignIn,onUpgrade}) {
   const [tick,setTick]=useState(0);
   useEffect(()=>{const id=setInterval(()=>setTick(t=>(t+1)%(DEMO_LINES.length+3)),750);return()=>clearInterval(id);},[]);
   const ff="'Courier New',monospace";
@@ -566,7 +566,7 @@ function Landing({onStart,onSignIn}) {
           <p style={{color:"#778",fontSize:"12px",textAlign:"center",marginBottom:"28px"}}>Pick a mission template and your AI team gets to work immediately.</p>
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"10px"}}>
             {quickTpls.map(t=>(
-              <button key={t.label} onClick={onStart} style={{border:`1px solid ${T.border}`,background:T.bg3,padding:"14px",textAlign:"left",cursor:"pointer",fontFamily:ff,transition:"border-color .15s"}}
+              <button key={t.label} onClick={()=>onStartWithGoal(t.goal)} style={{border:`1px solid ${T.border}`,background:T.bg3,padding:"14px",textAlign:"left",cursor:"pointer",fontFamily:ff,transition:"border-color .15s"}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor=T.cyan}
                 onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
                 <div style={{color:T.cyan,fontSize:"16px",marginBottom:"6px"}}>→</div>
@@ -590,7 +590,7 @@ function Landing({onStart,onSignIn}) {
                 <div style={{color:pl.c,fontSize:"10px",letterSpacing:"3px",marginBottom:"6px"}}>{pl.n}</div>
                 <div style={{display:"flex",alignItems:"baseline",gap:"4px",marginBottom:"14px"}}><span style={{color:"#fff",fontSize:"26px",fontWeight:"bold"}}>{pl.p}</span><span style={{color:T.muted,fontSize:"11px"}}>{pl.per}</span></div>
                 {pl.feats.map(f=><div key={f} style={{color:T.muted,fontSize:"10px",marginBottom:"5px",lineHeight:1.5}}>✓ {f}</div>)}
-                {pl.cta&&<button onClick={onStart} style={{...Btn(pl.c),width:"100%",marginTop:"14px",padding:"8px",fontSize:"10px"}}>{pl.cta}</button>}
+                {pl.cta&&<button onClick={()=>onUpgrade(pl.n.toLowerCase())} style={{...Btn(pl.c),width:"100%",marginTop:"14px",padding:"8px",fontSize:"10px"}}>{pl.cta}</button>}
               </div>
             ))}
           </div>
@@ -1126,7 +1126,12 @@ export default function App() {
 
   const filteredRuns=runs.filter(r=>(brFilter==="all"||(r.branch||"main")===brFilter)&&(!histSearch||(r.goal||"").toLowerCase().includes(histSearch.toLowerCase())));
 
-  if(!landed)return <Landing onStart={()=>setLanded(true)} onSignIn={()=>{setLanded(true);setShowAuth(true);}}/>;
+  if(!landed)return <Landing
+    onStart={()=>setLanded(true)}
+    onStartWithGoal={g=>{setGoal(g);setLanded(true);}}
+    onSignIn={()=>{setLanded(true);setShowAuth(true);}}
+    onUpgrade={plan=>{setLanded(true);setShowUpg(true);}}
+  />;
 
   return (
     <>
