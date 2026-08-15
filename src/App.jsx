@@ -590,7 +590,7 @@ function Landing({onStart,onStartWithGoal,onSignIn,onUpgrade}) {
                 <div style={{color:pl.c,fontSize:"10px",letterSpacing:"3px",marginBottom:"6px"}}>{pl.n}</div>
                 <div style={{display:"flex",alignItems:"baseline",gap:"4px",marginBottom:"14px"}}><span style={{color:"#fff",fontSize:"26px",fontWeight:"bold"}}>{pl.p}</span><span style={{color:T.muted,fontSize:"11px"}}>{pl.per}</span></div>
                 {pl.feats.map(f=><div key={f} style={{color:T.muted,fontSize:"10px",marginBottom:"5px",lineHeight:1.5}}>✓ {f}</div>)}
-                {pl.cta&&<button onClick={()=>onUpgrade(pl.n.toLowerCase())} style={{...Btn(pl.c),width:"100%",marginTop:"14px",padding:"8px",fontSize:"10px"}}>{pl.cta}</button>}
+                {pl.cta&&<button onClick={()=>onUpgrade()} style={{...Btn(pl.c),width:"100%",marginTop:"14px",padding:"8px",fontSize:"10px"}}>{pl.cta}</button>}
               </div>
             ))}
           </div>
@@ -1127,10 +1127,10 @@ export default function App() {
   const filteredRuns=runs.filter(r=>(brFilter==="all"||(r.branch||"main")===brFilter)&&(!histSearch||(r.goal||"").toLowerCase().includes(histSearch.toLowerCase())));
 
   if(!landed)return <Landing
-    onStart={()=>setLanded(true)}
-    onStartWithGoal={g=>{setGoal(g);setLanded(true);}}
+    onStart={()=>{setTab("swarm");setLanded(true);}}
+    onStartWithGoal={g=>{setGoal(g);setTab("swarm");setLanded(true);}}
     onSignIn={()=>{setLanded(true);setShowAuth(true);}}
-    onUpgrade={plan=>{setLanded(true);setShowUpg(true);}}
+    onUpgrade={()=>{setLanded(true);setShowUpg(true);}}
   />;
 
   return (
