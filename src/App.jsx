@@ -78,6 +78,21 @@ async function callGemini({messages,system,_geminiKey="",_maxTok=1000,_model="ge
   if(!res.ok)throw new Error(d.error?.message||`HTTP ${res.status}`);
   return d.candidates?.[0]?.content?.parts?.[0]?.text||"";
 }
+/**
+ * Streams model-generated text and reports progress through callbacks.
+ * @param {Object} options - Streaming request and callback options.
+ * @param {Array<Object>} options.messages - Messages to send to the model.
+ * @param {string} options.system - System instruction for the model.
+ * @param {Function} options.onToken - Called with each generated text fragment.
+ * @param {Function} options.onDone - Called when streaming completes successfully.
+ * @param {Function} options.onErr - Called with an error message when the request fails.
+ * @param {string} [options._key=""] - Anthropic API key.
+ * @param {string} [options._proxy=""] - Proxy URL for the request.
+ * @param {string} [options._jwt=""] - JWT used for authenticated proxy requests.
+ * @param {number} [options._maxTok=1000] - Maximum number of tokens to generate.
+ * @param {string} [options._model=""] - Model to use.
+ * @param {string} [options._geminiKey=""] - Gemini API key when a Gemini model is selected.
+ */
 async function streamClaude({messages,system,onToken,onDone,onErr,_key="",_proxy="",_jwt="",_maxTok=1000,_model="",_geminiKey=""}) {
   if(isGemini(_model))return streamGemini({messages,system,onToken,onDone,onErr,_geminiKey,_maxTok,_model});
   const up=!!_proxy;
@@ -104,6 +119,18 @@ async function streamClaude({messages,system,onToken,onDone,onErr,_key="",_proxy
     onDone();
   } catch(e){onErr(e.message);}
 }
+/**
+ * Sends a chat request to the configured AI model and returns its text response.
+ * @param {Object} options - Request configuration.
+ * @param {Array<Object>} options.messages - Conversation messages.
+ * @param {string} options.system - System prompt.
+ * @param {string} [options._key=""] - Anthropic API key.
+ * @param {string} [options._proxy=""] - Proxy URL.
+ * @param {string} [options._jwt=""] - Proxy authentication token.
+ * @param {string} [options._model=""] - Model identifier.
+ * @param {string} [options._geminiKey=""] - Google Gemini API key.
+ * @returns {Promise<string>} The generated response text.
+ */
 async function callClaude({messages,system,_key="",_proxy="",_jwt="",_model="",_geminiKey=""}) {
   if(isGemini(_model))return callGemini({messages,system,_geminiKey,_model});
   const up=!!_proxy;
@@ -324,6 +351,15 @@ function UpgradeModal({used,sbUrl,jwt,onClose,onPro}) {
   );
 }
 
+/**
+ * Renders a sign-in and account-creation modal.
+ * @param {Object} props - Component properties.
+ * @param {string} props.sbUrl - Supabase project URL.
+ * @param {string} props.sbKey - Supabase API key.
+ * @param {Function} props.onSession - Called with the authenticated session.
+ * @param {Function} props.onSkip - Called when authentication is skipped or unavailable.
+ * @returns {JSX.Element} The authentication modal.
+ */
 function AuthModal({sbUrl,sbKey,onSession,onSkip}) {
   const [mode,setMode]=useState("login");const [email,setEmail]=useState("");const [pwd,setPwd]=useState("");
   const [busy,setBusy]=useState(false);const [err,setErr]=useState("");const [msg,setMsg]=useState("");
@@ -379,6 +415,15 @@ const WHO=[
   {i:"🏢",t:"Startups",d:"Your first AI employees. Ready on day one."},
   {i:"⚡",t:"Agencies",d:"Deliver client work faster, at higher margin."},
 ];
+/**
+ * Render the Neural Swarm landing page with mission previews, features, templates, pricing, and calls to action.
+ * @param {Object} props - Landing page callbacks.
+ * @param {Function} props.onStart - Starts a new mission.
+ * @param {Function} props.onStartWithGoal - Starts a mission with a prefilled goal.
+ * @param {Function} props.onSignIn - Opens the sign-in flow.
+ * @param {Function} props.onUpgrade - Opens the upgrade flow.
+ * @return {JSX.Element} The rendered landing page.
+ */
 function Landing({onStart,onStartWithGoal,onSignIn,onUpgrade}) {
   const [tick,setTick]=useState(0);
   useEffect(()=>{const id=setInterval(()=>setTick(t=>(t+1)%(DEMO_LINES.length+3)),750);return()=>clearInterval(id);},[]);
@@ -826,7 +871,10 @@ function NeuralSwarmBg({ agOut = {}, phase = 'idle' }) {
   return <canvas ref={cvRef} style={{position:'fixed',inset:0,zIndex:0,pointerEvents:'none',opacity:.72}}/>;
 }
 
-// ── APP ───────────────────────────────────────────────────────────────────────
+/**
+ * Render the Neural Swarm application and manage its mission, agent, history, marketplace, and account workflows.
+ * @return {JSX.Element} The application interface.
+ */
 export default function App() {
   const [landed,   setLanded]   = useState(false);
   const [apiKey,   setApiKey]   = useState(""); const [showKey,   setShowKey]   = useState(false);
