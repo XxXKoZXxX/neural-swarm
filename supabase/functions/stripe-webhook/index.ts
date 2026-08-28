@@ -25,43 +25,48 @@ serve(async (req) => {
 
   const db = restClient(supabaseUrl, supabaseKey);
 
-  // ── Template purchase fulfilled ────────────────────────────────────────────
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     const templateId = session.metadata?.templateId;
+    const userId = session.metadata?.userId || null;
 
     if (templateId) {
-      // Record purchase
       await db.insert("template_purchases", {
         template_id: templateId,
+        // Attributed by the checkout function. Without this the
+        // duplicate-purchase guard has nothing to match on.
+        user_id: userId,
         customer_email: session.customer_details?.email,
         amount: (session.amount_total ?? 0) / 100,
       });
-      // Increment usage count
       const [tpl] = await db.select<{ usage_count?: number }>("templates", `id=eq.${templateId}`);
       if (tpl) {
         await db.patch("templates", `id=eq.${templateId}`, { usage_count: (tpl.usage_count ?? 0) + 1 });
       }
     }
 
-    // Subscription checkout completed — upsert subscription record
     if (session.mode === "subscription") {
       const sub = await stripe.subscriptions.retrieve(session.subscription as string);
       const email = session.customer_details?.email ?? "";
-      await upsertSubscription(db, email, resolvePlan(sub), sub);
+      const plan  = resolvePlan(sub);
+      await upsertSubscription(db, email, plan, sub);
+      await syncUserTier(db, userId ?? sub.metadata?.userId ?? null, plan);
     }
   }
 
-  // ── Subscription updated / renewed ────────────────────────────────────────
   if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.created") {
-    const sub = event.data.object as Stripe.Subscription;
-    await upsertSubscription(db, await customerEmail(stripe, sub), resolvePlan(sub), sub);
+    const sub   = event.data.object as Stripe.Subscription;
+    const email = await customerEmail(stripe, sub);
+    const plan  = resolvePlan(sub);
+    await upsertSubscription(db, email, plan, sub);
+    await syncUserTier(db, sub.metadata?.userId ?? null, plan);
   }
 
-  // ── Subscription cancelled ────────────────────────────────────────────────
   if (event.type === "customer.subscription.deleted") {
-    const sub = event.data.object as Stripe.Subscription;
-    await upsertSubscription(db, await customerEmail(stripe, sub), "free", sub);
+    const sub   = event.data.object as Stripe.Subscription;
+    const email = await customerEmail(stripe, sub);
+    await upsertSubscription(db, email, "free", sub);
+    await syncUserTier(db, sub.metadata?.userId ?? null, "free");
   }
 
   return new Response(JSON.stringify({ received: true }), {
@@ -75,19 +80,43 @@ async function customerEmail(stripe: Stripe, sub: Stripe.Subscription): Promise<
 }
 
 function resolvePlan(sub: Stripe.Subscription): string {
-  // Match price amount to plan tier ($29 = pro, $79 = power)
   const amount = sub.items.data[0]?.price?.unit_amount ?? 0;
   if (amount >= 7900) return "power";
   if (amount >= 2900) return "pro";
   return "free";
 }
 
-function upsertSubscription(db: Db, email: string, plan: string, sub: Stripe.Subscription) {
-  return db.insert("subscriptions", {
+async function upsertSubscription(
+  db: Db,
+  email: string,
+  plan: string,
+  sub: Stripe.Subscription,
+) {
+  await db.insert("subscriptions", {
     user_email: email,
     plan,
     status: sub.status,
     stripe_customer_id: sub.customer as string,
     current_period_end: new Date((sub.current_period_end ?? 0) * 1000).toISOString(),
   }, { Prefer: "resolution=merge-duplicates,return=representation" });
+}
+
+// public.users.tier is keyed by auth uid, so it can only be kept in step when
+// checkout attributed the session to an account. The app reads its plan from
+// `subscriptions`, so a missing id here degrades rather than breaks.
+async function syncUserTier(
+  db: Db,
+  userId: string | null,
+  plan: string,
+) {
+  if (!userId) {
+    console.warn("[syncUserTier] no userId on session/subscription metadata; skipping users.tier");
+    return;
+  }
+  try {
+    const res = await db.patch("users", `id=eq.${userId}`, { tier: plan });
+    if (!res.ok) console.error("[syncUserTier]", res.status, await res.text());
+  } catch (err) {
+    console.error("[syncUserTier] threw:", err);
+  }
 }

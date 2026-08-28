@@ -1,10 +1,22 @@
 # ⬡ Neural Swarm
 
-> **10 specialized AI agents. One goal. Full output.**
+> **10 specialized AI agents. One goal. Autonomous production-grade execution.**
 
-Give Neural Swarm a goal. An orchestrator plans the execution. Agents run in sequence — architecting, coding, testing, reviewing. Every run is versioned, scored, and saved.
+Give Neural Swarm a goal. An orchestrator plans the execution. Agents run in sequence — architecting, coding, testing, auditing, and reviewing. Every run is versioned, scored, and saved.
 
-**Live demo:** [neural-swarm.vercel.app](https://neural-swarm.vercel.app) · **Get access:** [Gumroad](https://xxxxxkozxxxxx.gumroad.com)
+[![CI](https://github.com/XxXKoZXxX/neural-swarm/actions/workflows/deploy.yml/badge.svg)](https://github.com/XxXKoZXxX/neural-swarm/actions/workflows/deploy.yml)
+[![Pages](https://github.com/XxXKoZXxX/neural-swarm/actions/workflows/pages.yml/badge.svg)](https://github.com/XxXKoZXxX/neural-swarm/actions/workflows/pages.yml)
+
+**Live demo:** [neural-swarm.vercel.app](https://neural-swarm.vercel.app) · **Mirror:** [xxxkozxxx.github.io/neural-swarm](https://xxxkozxxx.github.io/neural-swarm/) · **Get access:** [Gumroad](https://xxxxxkozxxxxx.gumroad.com)
+
+---
+
+## ⚡ What You Get
+
+- **⚡ One goal, a full pipeline**: An orchestrator picks the agents, runs them in order, and hands back code, tests, and docs from a single prompt.
+- **🛡 Security audit desk**: Point it at a repo or paste code for a three-stage `RESEARCHER → DEBUGGER → REVIEWER` pass with severity ratings and patch diffs.
+- **💰 Cost shown per run**: Token usage and estimated spend are tracked live and attached to every saved run. No markup — you bring your own API key.
+- **🕸 Visual DAG flow builder**: Drag, configure, and execute custom agent execution graphs.
 
 ---
 
@@ -25,27 +37,27 @@ Give Neural Swarm a goal. An orchestrator plans the execution. Agents run in seq
 
 ---
 
-## How It Works
-
-```
-You type a goal
-       ↓
-Orchestrator picks 2–5 agents + writes per-agent instructions
-       ↓
-Agents execute in sequence, each receiving prior context
-       ↓
-Context compressor preserves key decisions when chains get long
-       ↓
-Overseer scores the full run /10 and lists what's still missing
-       ↓
-Run saved to Supabase with cost, score, branch, and version
-```
-
-Everything streams live. You watch agents think token by token.
-
----
-
 ## Features
+
+### 🛡 GitHub Security Audit & Bug Bounty Desk
+Drop a public or private GitHub repository URL or paste code to execute a 3-stage security inspection pipeline (`RESEARCHER` → `DEBUGGER` → `REVIEWER`).
+- Rates vulnerabilities: `[CRITICAL]`, `[MAJOR]`, `[MINOR]`, `[NIT]`
+- Generates exact root-cause diagnostics & patch diffs
+- 1-click **Export as GitHub Issue** and **Save to Neural Vault**
+
+### 🕸 Visual DAG Agent Workflow Builder
+Visually design and connect custom agent topologies.
+- Presets: `SaaS Dev Pipeline`, `Bug Bounty Scan`, `Refactor & Polish`, `UI/UX Spec & Code`
+- Execute custom topologies live in real-time
+
+### 🗝 Neural Vault & Knowledge Base
+Store, search, and reuse key architectural decisions, prompt snippets, and code outputs across sessions with 1-click context injection into active Swarm goals.
+
+### 🎙 Audio Briefings (Text-to-Speech)
+Hands-free voiceovers for Overseer evaluations with corporate noir voice synthesis.
+
+### 💻 Dispatch Code Exporter
+Export dispatches into copy-pasteable Node.js CLI scripts, Python scripts, or cURL SSE commands.
 
 ### Prompt Forge
 3,240 possible prompt transformations before any agent sees your goal.

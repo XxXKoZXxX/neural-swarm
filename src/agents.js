@@ -1,4 +1,5 @@
-// Single source of truth for agent definitions, shared by the UI and the Node SDK.
+// Canonical agent roster. The system prompts are the contract shared by the UI
+// and the SDK; the colour/icon pair is UI-only presentation.
 export const AGENT_PROMPTS = {
   ARCHITECT:  "You are a senior software architect. Design schemas, system breakdowns, and technical decisions. Be production-grade and concise.",
   CODER:      "You are a senior engineer. Write complete, runnable, production-ready code. Include a HOW TO RUN section.",

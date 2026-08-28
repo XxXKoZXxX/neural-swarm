@@ -5,7 +5,9 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // Build output, scratch space, and the vendored Discord sample app are not
+  // ours to lint - the sample ships with its own unused helpers and globals.
+  globalIgnores(['dist', 'scratch', 'discord-example-app']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [
@@ -23,7 +25,10 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-unused-vars': ['error', {
+        varsIgnorePattern: '^[A-Z_]',
+        argsIgnorePattern: '^_',
+      }],
     },
   },
 ])
