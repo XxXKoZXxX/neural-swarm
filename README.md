@@ -4,16 +4,19 @@
 
 Give Neural Swarm a goal. An orchestrator plans the execution. Agents run in sequence — architecting, coding, testing, auditing, and reviewing. Every run is versioned, scored, and saved.
 
-**Live demo:** [neural-swarm.vercel.app](https://neural-swarm.vercel.app) · **Get access:** [Gumroad](https://xxxxxkozxxxxx.gumroad.com)
+[![CI](https://github.com/XxXKoZXxX/neural-swarm/actions/workflows/deploy.yml/badge.svg)](https://github.com/XxXKoZXxX/neural-swarm/actions/workflows/deploy.yml)
+[![Pages](https://github.com/XxXKoZXxX/neural-swarm/actions/workflows/pages.yml/badge.svg)](https://github.com/XxXKoZXxX/neural-swarm/actions/workflows/pages.yml)
+
+**Live demo:** [neural-swarm.vercel.app](https://neural-swarm.vercel.app) · **Mirror:** [xxxkozxxx.github.io/neural-swarm](https://xxxkozxxx.github.io/neural-swarm/) · **Get access:** [Gumroad](https://xxxxxkozxxxxx.gumroad.com)
 
 ---
 
-## ⚡ Market Highlights & ROI
+## ⚡ What You Get
 
-- **⚡ 10x Developer Speed**: Generate complete full-stack apps, tests, & docs in seconds.
-- **🛡 99.4% Security Audit Accuracy**: Automated vulnerability scanner, RLS flaw detector, & fix diff generator.
-- **💰 $0.000003/Token Transparency**: Live cost tracking with zero markups or hidden fees.
-- **🕸 Visual DAG Flow Builder**: Drag, configure, and execute custom agent execution graphs visually.
+- **⚡ One goal, a full pipeline**: An orchestrator picks the agents, runs them in order, and hands back code, tests, and docs from a single prompt.
+- **🛡 Security audit desk**: Point it at a repo or paste code for a three-stage `RESEARCHER → DEBUGGER → REVIEWER` pass with severity ratings and patch diffs.
+- **💰 Cost shown per run**: Token usage and estimated spend are tracked live and attached to every saved run. No markup — you bring your own API key.
+- **🕸 Visual DAG flow builder**: Drag, configure, and execute custom agent execution graphs.
 
 ---
 

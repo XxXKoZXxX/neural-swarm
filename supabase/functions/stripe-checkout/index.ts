@@ -7,11 +7,45 @@ const CORS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Paste your Stripe price IDs here after creating the products in Stripe dashboard
 const PRICE_IDS: Record<string, string> = {
   pro:   Deno.env.get("STRIPE_PRICE_PRO")   ?? "price_REPLACE_PRO",
   power: Deno.env.get("STRIPE_PRICE_POWER") ?? "price_REPLACE_POWER",
 };
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...CORS, "Content-Type": "application/json" },
+  });
+
+// Turn a thrown Stripe error into something the browser can actually act on.
+// Previously these escaped unhandled and the client saw a generic failure with
+// no cause, which is why an archived-product 400 read as "failed to reach Stripe".
+function stripeError(err: unknown, context: string) {
+  const e = err as {
+    message?: string;
+    type?: string;
+    rawType?: string;
+    code?: string;
+    param?: string;
+    statusCode?: number;
+    requestId?: string;
+  };
+  const status = typeof e?.statusCode === "number" ? e.statusCode : 502;
+  console.error(`[${context}] stripe ${e?.rawType ?? e?.type ?? "error"} ${status}: ${e?.message}`, {
+    param: e?.param,
+    code: e?.code,
+    requestId: e?.requestId,
+  });
+  return json({
+    error: e?.message ?? "Stripe request failed",
+    context,
+    stripe_type: e?.rawType ?? e?.type ?? null,
+    stripe_code: e?.code ?? null,
+    stripe_param: e?.param ?? null,
+    stripe_request_id: e?.requestId ?? null,
+  }, status >= 400 && status < 600 ? status : 502);
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
@@ -21,102 +55,156 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  if (!stripeKey) {
-    return new Response(JSON.stringify({ error: "STRIPE_SECRET_KEY not set" }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
-    });
-  }
+  if (!stripeKey) return json({ error: "STRIPE_SECRET_KEY not set" }, 500);
 
-  const stripe = new Stripe(stripeKey, { apiVersion: "2024-06-20", httpClient: Stripe.createFetchHttpClient() });
+  const stripe = new Stripe(stripeKey, {
+    apiVersion: "2024-06-20",
+    httpClient: Stripe.createFetchHttpClient(),
+  });
 
   let body: { plan?: string; templateId?: string };
-  try { body = await req.json(); } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON" }), {
-      status: 400, headers: { ...CORS, "Content-Type": "application/json" },
-    });
+  try {
+    body = await req.json();
+  } catch {
+    return json({ error: "Invalid JSON" }, 400);
   }
 
-  // ── Subscription checkout (plan upgrade) ───────────────────────────────────
+  // Resolve the caller once, so both flows can attribute the purchase to a real
+  // account instead of relying on whatever email the buyer types into Stripe.
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const callerJwt = authHeader.replace("Bearer ", "").trim();
+  let user: { id: string; email?: string } | null = null;
+  if (callerJwt && callerJwt !== supabaseKey) {
+    try {
+      const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+        headers: { apikey: supabaseKey, Authorization: `Bearer ${callerJwt}` },
+      });
+      if (userRes.ok) user = await userRes.json();
+    } catch (err) {
+      console.error("[auth.resolve] threw, continuing unattributed:", err);
+    }
+  }
+
+  // ── Subscription checkout ────────────────────────────────────────────
   if (body.plan && PRICE_IDS[body.plan]) {
     const priceId = PRICE_IDS[body.plan];
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      payment_method_types: ["card"],
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${frontendUrl}?upgraded=true&plan=${body.plan}`,
-      cancel_url:  `${frontendUrl}?upgraded=false`,
-    });
-    return new Response(JSON.stringify({ url: session.url }), {
-      headers: { ...CORS, "Content-Type": "application/json" },
-    });
+
+    if (priceId.startsWith("price_REPLACE_")) {
+      return json({
+        error: `Price ID for plan "${body.plan}" is not configured`,
+        context: "config",
+        hint: `Set STRIPE_PRICE_${body.plan.toUpperCase()} in the Edge Function environment.`,
+      }, 500);
+    }
+
+    // Check the price and its product are live before creating a session, so a
+    // misconfiguration reports as a config problem rather than a checkout failure.
+    try {
+      const price = await stripe.prices.retrieve(priceId, { expand: ["product"] });
+      const product = price.product as Stripe.Product | Stripe.DeletedProduct;
+      const productActive = "active" in product ? product.active : false;
+      if (!price.active || !productActive) {
+        return json({
+          error: `Plan "${body.plan}" is not purchasable right now.`,
+          context: "price_inactive",
+          detail: !price.active
+            ? `Price ${priceId} is archived in Stripe.`
+            : `The product behind price ${priceId} is archived in Stripe.`,
+          price_id: priceId,
+          hint: "Reactivate the product/price in the Stripe dashboard, or point STRIPE_PRICE_* at a live price.",
+        }, 409);
+      }
+    } catch (err) {
+      return stripeError(err, "prices.retrieve");
+    }
+
+    try {
+      const session = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        payment_method_types: ["card"],
+        line_items: [{ price: priceId, quantity: 1 }],
+        ...(user?.email ? { customer_email: user.email } : {}),
+        metadata: { userId: user?.id ?? "", plan: body.plan },
+        // Carried onto the subscription itself so later customer.subscription.*
+        // events can still be tied back to the account.
+        subscription_data: { metadata: { userId: user?.id ?? "", plan: body.plan } },
+        success_url: `${frontendUrl.trim()}?upgraded=true&plan=${body.plan}`,
+        cancel_url:  `${frontendUrl.trim()}?upgraded=false`,
+      });
+      return json({ url: session.url });
+    } catch (err) {
+      return stripeError(err, "checkout.sessions.create:subscription");
+    }
   }
 
-  // ── One-time template purchase ─────────────────────────────────────────────
+  // ── One-off template purchase ────────────────────────────────────────
   if (body.templateId) {
     const tid = body.templateId;
 
-    // Fetch template price from Supabase
-    const tplRes = await fetch(
-      `${supabaseUrl}/rest/v1/templates?id=eq.${tid}&select=id,name,price`,
-      { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } },
-    );
-    const [tpl] = await tplRes.json();
-    if (!tpl) {
-      return new Response(JSON.stringify({ error: "Template not found" }), {
-        status: 404, headers: { ...CORS, "Content-Type": "application/json" },
-      });
+    let tpl: { id: string; name: string; price: number } | undefined;
+    try {
+      const tplRes = await fetch(
+        `${supabaseUrl}/rest/v1/templates?id=eq.${tid}&select=id,name,price`,
+        { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } },
+      );
+      if (!tplRes.ok) {
+        const text = await tplRes.text();
+        console.error(`[templates.lookup] ${tplRes.status}: ${text}`);
+        return json({ error: "Template lookup failed", context: "templates.lookup", status: tplRes.status }, 502);
+      }
+      [tpl] = await tplRes.json();
+    } catch (err) {
+      console.error("[templates.lookup] threw:", err);
+      return json({ error: "Template lookup failed", context: "templates.lookup" }, 502);
     }
 
-    // Check for existing purchase (using email from JWT if present)
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const jwt = authHeader.replace("Bearer ", "");
-    if (jwt && jwt !== supabaseKey) {
-      const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
-        headers: { apikey: supabaseKey, Authorization: `Bearer ${jwt}` },
-      });
-      if (userRes.ok) {
-        const user = await userRes.json();
+    if (!tpl) return json({ error: "Template not found" }, 404);
+
+    // Match on user_id OR email. Rows written before this change carry only
+    // customer_email, and checking user_id alone meant the duplicate-purchase
+    // guard never fired - the same template could be bought repeatedly.
+    if (user?.id) {
+      try {
+        const ors = [`user_id.eq.${user.id}`];
+        if (user.email) ors.push(`customer_email.eq.${user.email}`);
         const purchaseRes = await fetch(
-          `${supabaseUrl}/rest/v1/template_purchases?user_id=eq.${user.id}&template_id=eq.${tid}`,
+          `${supabaseUrl}/rest/v1/template_purchases?template_id=eq.${tid}&or=(${ors.join(",")})`,
           { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } },
         );
         const purchases = await purchaseRes.json();
-        if (purchases?.length > 0) {
-          return new Response(JSON.stringify({ already_purchased: true }), {
-            headers: { ...CORS, "Content-Type": "application/json" },
-          });
+        if (Array.isArray(purchases) && purchases.length > 0) {
+          return json({ already_purchased: true });
         }
+      } catch (err) {
+        // A failed duplicate-purchase check should not block checkout.
+        console.error("[purchase.precheck] threw, continuing:", err);
       }
     }
 
-    if (!tpl.price || tpl.price === 0) {
-      return new Response(JSON.stringify({ already_purchased: true }), {
-        headers: { ...CORS, "Content-Type": "application/json" },
+    if (!tpl.price || tpl.price === 0) return json({ already_purchased: true });
+
+    try {
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        payment_method_types: ["card"],
+        line_items: [{
+          price_data: {
+            currency: "usd",
+            unit_amount: Math.round(tpl.price * 100),
+            product_data: { name: tpl.name },
+          },
+          quantity: 1,
+        }],
+        ...(user?.email ? { customer_email: user.email } : {}),
+        success_url: `${frontendUrl.trim()}?purchase=success&template=${tid}`,
+        cancel_url:  `${frontendUrl.trim()}?purchase=cancelled`,
+        metadata: { templateId: tid, userId: user?.id ?? "" },
       });
+      return json({ url: session.url });
+    } catch (err) {
+      return stripeError(err, "checkout.sessions.create:template");
     }
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      payment_method_types: ["card"],
-      line_items: [{
-        price_data: {
-          currency: "usd",
-          unit_amount: Math.round(tpl.price * 100),
-          product_data: { name: tpl.name },
-        },
-        quantity: 1,
-      }],
-      success_url: `${frontendUrl}?purchase=success&template=${tid}`,
-      cancel_url:  `${frontendUrl}?purchase=cancelled`,
-      metadata: { templateId: tid },
-    });
-
-    return new Response(JSON.stringify({ url: session.url }), {
-      headers: { ...CORS, "Content-Type": "application/json" },
-    });
   }
 
-  return new Response(JSON.stringify({ error: "Provide plan or templateId" }), {
-    status: 400, headers: { ...CORS, "Content-Type": "application/json" },
-  });
+  return json({ error: "Provide plan or templateId" }, 400);
 });
