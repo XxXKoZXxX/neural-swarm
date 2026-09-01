@@ -1525,12 +1525,7 @@ export default function App() {
 
   const filteredRuns=runs.filter(r=>(brFilter==="all"||(r.branch||"main")===brFilter)&&(!histSearch||(r.goal||"").toLowerCase().includes(histSearch.toLowerCase())));
 
-  if(!landed)return <Landing
-    onStart={()=>{setTab("swarm");setLanded(true);}}
-    onStartWithGoal={g=>{setGoal(g);setTab("swarm");setLanded(true);}}
-    onSignIn={()=>{setLanded(true);setShowAuth(true);}}
-    onUpgrade={()=>{setLanded(true);setShowUpg(true);}}
-  />;
+  if(!landed)return <Landing onStart={()=>setLanded(true)} onSignIn={()=>{setLanded(true);setShowAuth(true);}}/>;
 
   return (
     <>
