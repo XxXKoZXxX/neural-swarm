@@ -1,10 +1,13 @@
 name: Deploy app
 
-# Builds mobile/ and publishes it as its own Vercel project, separate from the
-# website project in deploy.yml. The site deploy is untouched by this workflow.
+# Publishes mobile/ to the Neural Swarm Vercel project at /app/, giving the phone
+# a permanent HTTPS URL to install from — Android will not offer the install
+# prompt without one.
 #
-# First run creates the "neural-swarm-app" project inside the org identified by
-# VERCEL_ORG_ID and prints the permanent HTTPS URL the phone installs from.
+# The app is deployed as a prebuilt artifact alongside the website, so the exact
+# bundle that passed the tests is what ships, and the site keeps working at /.
+# Uses the same VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID_* secrets that
+# the existing site deploy already proves out, so no new project is required.
 
 on:
   push:
@@ -19,6 +22,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: app-deploy-${{ github.ref }}
@@ -51,7 +55,7 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Check installability
+      - name: Check it is installable
         run: |
           node -e "
           const fs = require('fs');
@@ -72,18 +76,15 @@ jobs:
             console.log((pass ? '  ok   ' : '  FAIL ') + label);
             if (!pass) bad++;
           }
-          if (bad) { console.error('\nApp is not installable.'); process.exit(1); }
-          console.log('\nApp is installable.');
+          if (bad) { console.error('\nNot installable.'); process.exit(1); }
+          console.log('\nInstallable.');
           "
 
-  deploy:
-    name: Publish app
+  publish:
+    name: Publish to /app/
     needs: verify
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mobile
     steps:
       - uses: actions/checkout@v4
 
@@ -91,38 +92,69 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-          cache-dependency-path: mobile/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            mobile/package-lock.json
 
-      - run: npm ci
+      - name: Build the website
+        run: |
+          npm ci
+          npm run build
 
-      - name: Link the app project
-        run: npx --yes vercel@latest link --yes --project neural-swarm-app --token="$VERCEL_TOKEN"
+      - name: Build the app for the /app/ subpath
+        working-directory: mobile
+        run: |
+          npm ci
+          APP_BASE=/app/ npm run build
+
+      - name: Assemble one deployable tree
+        run: |
+          mkdir -p dist/app
+          cp -r mobile/dist/. dist/app/
+          cp dist/index.html dist/404.html
+          cp dist/app/index.html dist/app/404.html
+          echo "--- dist/app ---"
+          ls dist/app
+          echo "--- size ---"
+          du -sh dist
+
+      - name: Publish (prebuilt, so nothing is rebuilt remotely)
+        id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-
-      - name: Deploy to production
-        id: deploy
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_NEURAL_SWARM }}
         run: |
           set -o pipefail
-          npx --yes vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN" 2>&1 | tee /tmp/deploy.log
+          npx --yes vercel@latest build --prod --yes --token="$VERCEL_TOKEN" 2>&1 | tee /tmp/build.log
+          npx --yes vercel@latest deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" 2>&1 | tee /tmp/deploy.log
+
           url=$(grep -Eo 'https://[a-z0-9.-]+\.vercel\.app' /tmp/deploy.log | tail -1)
-          if [ -z "$url" ]; then
-            echo "::error::Deploy finished but no URL was found in the output."
-            exit 1
-          fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
           {
-            echo "## Neural Swarm app deployed"
+            echo "## Neural Swarm app published"
             echo ""
-            echo "**Install URL:** $url"
+            echo "**Install URL:** ${url:-https://neural-swarm.vercel.app}/app/"
             echo ""
-            echo "Open this on the phone in Chrome, then menu (top right) -> **Install app**."
-            echo "Override the project name any time with a different \`--project\` value."
+            echo "On the phone: open that URL in Chrome, then menu (top right) -> **Install app**."
           } >> "$GITHUB_STEP_SUMMARY"
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
 
-      - name: Summary
-        run: echo "App published at ${{ steps.deploy.outputs.url }}"
+      - name: Report the failure on the PR
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "App publish failed on \`${{ github.sha }}\`."
+            echo
+            echo '```'
+            tail -40 /tmp/build.log /tmp/deploy.log 2>/dev/null || echo "no log captured"
+            echo '```'
+          } > /tmp/comment.md
+          pr=$(gh pr list --head "${{ github.ref_name }}" --json number -q '.[0].number' 2>/dev/null || true)
+          if [ -n "$pr" ]; then
+            gh pr comment "$pr" --body-file /tmp/comment.md
+          else
+            echo "No PR for this branch; dumping log instead."
+            cat /tmp/comment.md
+          fi
