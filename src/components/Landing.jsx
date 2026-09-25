@@ -46,7 +46,7 @@ export default function Landing({ onStart, onStartWithGoal, onSignIn, onOpenDocs
   }, []);
 
   return (
-    <div>
+    <div className="landing landing-page">
       <nav className="landing-nav">
         <div className="row gap-10">
           <span className="row gap-8">
@@ -321,6 +321,15 @@ export default function Landing({ onStart, onStartWithGoal, onSignIn, onOpenDocs
           </span>
         </div>
       </footer>
+      {/* On a phone the header scrolls away long before the pricing table. */}
+      <div className="landing-cta-bar">
+        <button className="btn btn-ghost" onClick={onOpenDocs}>
+          Docs
+        </button>
+        <Button variant="primary" icon="rocket" className="grow" onClick={() => onStart()}>
+          Start free
+        </Button>
+      </div>
     </div>
   );
 }

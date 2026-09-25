@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "./icons.jsx";
 import { Badge, Button, IconButton } from "./ui.jsx";
 import useInstallPrompt from "../hooks/useInstallPrompt.js";
@@ -81,12 +81,41 @@ export function MobileSheet({
   const toast = useToast();
   const { canInstall, install, installed, isIosSafari } = useInstallPrompt();
   const [installHint, setInstallHint] = useState(false);
+  const sheetRef = useRef(null);
+  const restoreRef = useRef(null);
 
   useEffect(() => {
     if (!open) return undefined;
-    const onKey = (e) => e.key === "Escape" && onClose();
+    restoreRef.current = document.activeElement;
+
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      // Keep focus inside the sheet: a keyboard user should never tab into the
+      // page behind the overlay.
+      const focusable = sheetRef.current?.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    const timer = setTimeout(() => sheetRef.current?.querySelector("button")?.focus(), 40);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("keydown", onKey);
+      restoreRef.current?.focus?.();
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -98,7 +127,7 @@ export function MobileSheet({
 
   return (
     <div className="sheet-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="sheet" role="dialog" aria-modal="true" aria-label="All views">
+      <div className="sheet" role="dialog" aria-modal="true" aria-label="All views" ref={sheetRef}>
         <header className="sheet-head">
           <span className="strong">Where to?</span>
           <span className="grow" />

@@ -313,7 +313,42 @@ try {
   fail("phone settings", err.message || String(err));
 }
 
-/* 9 — no React errors anywhere in the flow. */
+/* 9 — the landing page keeps a call to action within thumb reach. */
+try {
+  await act(async () => {
+    window.location.hash = "#/";
+  });
+  await flush(3);
+  const bar = container.querySelector(".landing-cta-bar");
+  assert(bar, "phone landing page has no sticky CTA bar");
+  assert(/Start free/.test(bar.textContent), "the sticky bar needs a primary action");
+  const jump = container.querySelector(".landing-jump");
+  assert(jump, "phone landing page has no section jump chips");
+  pass("landing page keeps a reachable call to action");
+} catch (err) {
+  fail("landing CTA bar", err.message || String(err));
+}
+
+/* 10 — the sheet is modal: focus stays inside it. */
+try {
+  await act(async () => {
+    window.location.hash = "#/swarm";
+  });
+  await flush(2);
+  await click(byText("More", ".tabbar-btn"), "More");
+  const sheet = container.querySelector(".sheet");
+  assert(sheet, "sheet missing");
+  // Focus lands after the sheet paints, so wait for it rather than guessing.
+  await waitFor(() => sheet.contains(document.activeElement), { label: "focus to enter the sheet", timeout: 2000 });
+  assert(sheet.contains(document.activeElement), "focus should move into the sheet");
+  await click(byText("More", ".tabbar-btn"), "More again");
+  assert(!container.querySelector(".sheet"), "tapping More again should close the sheet");
+  pass("sheet takes and returns focus");
+} catch (err) {
+  fail("sheet focus", err.message || String(err));
+}
+
+/* 11 — no React errors anywhere in the flow. */
 try {
   const real = consoleErrors.filter((e) => !/DevTools|not wrapped in act|jsdom/i.test(e));
   assert(real.length === 0, `${real.length} console error(s):\n${real.slice(0, 4).join("\n---\n")}`);

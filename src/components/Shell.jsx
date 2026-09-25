@@ -54,6 +54,7 @@ export default function Shell({
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const announceRef = useRef(null);
 
   const { files = [], runs = [], vault = [], templates = [] } = search;
 
@@ -160,9 +161,14 @@ export default function Shell({
     writeStored(STORAGE.ui, { ...current, railCollapsed: next });
   }, []);
 
-  // A new view starts at the top — otherwise switching tabs lands mid-page.
+  // A new view starts at the top — otherwise switching tabs lands mid-page —
+  // and the title/live region tell assistive tech where we landed.
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    const label = TAB_LABELS[tab] || "Studio";
+    document.title = `${label} · Neural Swarm`;
+    // Announced through the live region node directly — no state, no extra render.
+    if (announceRef.current) announceRef.current.textContent = `${label} — ${NAV_ITEMS.find((n) => n.id === tab)?.blurb || ""}`;
   }, [tab]);
 
   const openSearch = useCallback(() => setPaletteOpen(true), []);
@@ -202,6 +208,7 @@ export default function Shell({
       <a className="skip-link" href="#view">
         Skip to content
       </a>
+      <p className="sr-only" role="status" aria-live="polite" ref={announceRef} />
 
       {!isMobile ? (
         <aside className={`rail ${collapsed ? "collapsed" : ""}`}>

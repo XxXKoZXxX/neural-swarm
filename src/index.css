@@ -2122,6 +2122,9 @@ pre.code > code {
 .landing-jump .chip {
   flex: none;
 }
+.landing-cta-bar {
+  display: none;
+}
 @media (min-width: 701px) {
   .landing-jump {
     display: none;
@@ -2131,6 +2134,26 @@ pre.code > code {
 @media (max-width: 700px) {
   .hide-sm {
     display: none !important;
+  }
+  .landing-cta-bar {
+    display: flex;
+    gap: 8px;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    padding: 10px 14px calc(10px + var(--safe-b));
+    padding-left: calc(14px + var(--safe-l));
+    padding-right: calc(14px + var(--safe-r));
+    background: color-mix(in srgb, var(--bg-0) 92%, transparent);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    border-top: 1px solid var(--border);
+  }
+  /* leave room for the bar so the footer is never covered */
+  .landing-page {
+    padding-bottom: calc(68px + var(--safe-b));
   }
   .landing-nav {
     gap: 8px;
