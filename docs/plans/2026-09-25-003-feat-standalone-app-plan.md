@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-25
 **Type:** Feature
-**Status:** In progress
+**Status:** Shipped — see PR #19. 76 logic tests + 27 DOM integration tests green, production build clean.
 
 ## Goal
 
