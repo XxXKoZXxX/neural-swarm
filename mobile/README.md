@@ -32,24 +32,33 @@ The app is a PWA, which Chrome on Android installs as a real app: launcher icon,
 splash screen, its own entry in the recents switcher, no URL bar, and it opens
 when offline. No Play Store review, no SDK, no Mac.
 
-**1. Get it onto an HTTPS URL.** Pick one:
+**1. Get it onto an HTTPS URL.**
 
-```bash
-# Deploy it (this is the easy permanent option)
-cd mobile
-npx vercel --prod          # → https://neural-swarm-app-xxxx.vercel.app
+It is already published. The repo's root build (`scripts/build-all.mjs`, run by
+Vercel via `vercel.json`) emits the website at `/` and this app at `/app/`, so
+every deploy carries both:
+
 ```
+https://neural-swarm.vercel.app/app/          production (main branch)
+https://neural-swarm-<hash>-<team>.vercel.app/app/   per-branch preview
+```
+
+Vercel's GitHub integration builds that automatically on every push — production
+from `main`, a preview URL from every other branch. Nothing extra to run.
 
 ```bash
 # Or run it locally and reach it over your Wi-Fi
-cd mobile
-npm install
-npm run dev                # serves on 0.0.0.0:5174, prints a Network URL
+npm ci                     # from the repo root; the app builds off those deps
+cd mobile && npm run dev   # serves on 0.0.0.0:5174, prints a Network URL
 ```
 
 > Chrome only offers to install over HTTPS or on `localhost`. A plain
 > `http://192.168.x.x:5174` LAN address works as a page but will not offer the
 > install prompt — use the deployed URL for the real install.
+
+> Prefer the app on its own domain instead of the `/app/` subpath? Run
+> `cd mobile && npx vercel --prod` and it becomes its own project. The build is
+> path-agnostic, so both work.
 
 **2. Open that URL in Chrome on the phone.**
 
@@ -61,6 +70,10 @@ On an iPhone: open in Safari → Share → **Add to Home Screen**. Same result.
 ---
 
 ## First run
+
+> Your API keys are entered **inside the app on the phone** (Setup screen) and
+> are stored only in that app's local storage. Never paste a key into a chat, an
+> issue, or a commit.
 
 1. Open **Setup**.
 2. Paste a key for at least one provider. **OpenRouter is the fastest start** —

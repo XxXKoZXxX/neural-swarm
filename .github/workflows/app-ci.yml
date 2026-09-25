@@ -1,0 +1,109 @@
+name: App CI
+
+# Tests the phone app and verifies the exact artifact Vercel publishes.
+#
+# Deployment itself is handled by the Vercel GitHub integration, which builds
+# this repo on every push using vercel.json -> scripts/build-all.mjs. Main
+# deploys to production, every other branch gets a preview URL.
+#
+# This workflow therefore gates rather than deploys:
+#   1. build precisely the way production builds (root dependencies only)
+#   2. assert the app under dist/app/ is installable and the site is intact
+#   3. run the test suites
+
+on:
+  push:
+    branches: [main, arena/01a0da12-neural-swarm]
+    paths:
+      - 'mobile/**'
+      - 'scripts/build-all.mjs'
+      - 'vercel.json'
+      - '.github/workflows/app-ci.yml'
+  pull_request:
+    paths:
+      - 'mobile/**'
+      - 'scripts/build-all.mjs'
+      - 'vercel.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and test the app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      # No mobile/node_modules here on purpose: this is exactly how Vercel
+      # builds, so the check below covers the real production path.
+      - name: Build site and app (as production does)
+        run: node scripts/build-all.mjs
+
+      - name: App must be present and installable
+        run: |
+          node -e "
+          const fs = require('fs');
+          const p = (f) => fs.existsSync('dist/app/' + f);
+          const m = JSON.parse(fs.readFileSync('dist/app/manifest.webmanifest', 'utf8'));
+          const sizes = m.icons.map(i => i.sizes);
+          const checks = [
+            ['manifest served under /app/', p('manifest.webmanifest')],
+            ['name', !!m.name],
+            ['short_name', !!m.short_name],
+            ['start_url', !!m.start_url],
+            ['display standalone', m.display === 'standalone'],
+            ['192px icon', sizes.includes('192x192')],
+            ['512px icon', sizes.includes('512x512')],
+            ['maskable icon', m.icons.some(i => i.purpose === 'maskable')],
+            ['service worker', p('sw.js')],
+            ['all three icons', ['192','512','maskable-512'].every(n => p('icons/icon-' + n + '.png'))],
+            ['app SPA fallback', p('404.html')],
+            ['site SPA fallback', fs.existsSync('dist/404.html')],
+            ['site entry intact', fs.existsSync('dist/index.html')],
+          ];
+          let bad = 0;
+          for (const [label, pass] of checks) {
+            console.log((pass ? '  ok   ' : '  FAIL ') + label);
+            if (!pass) bad++;
+          }
+          if (bad) { console.error('\nApp is not installable at /app/.'); process.exit(1); }
+          console.log('\n/ app is installable at /app/ and the site is intact.');
+          "
+
+      # Local base path sanity: the same source must also build for a domain root.
+      - name: App still builds for a root deployment
+        run: |
+          npm --prefix mobile run build
+          test -f mobile/dist/manifest.webmanifest
+          test -f mobile/dist/sw.js
+          echo "root-base build ok"
+
+      - name: Install mobile test dependencies
+        run: npm --prefix mobile ci
+
+      - name: Logic tests (adapters, error mapping, planner, diff)
+        run: npm --prefix mobile test
+
+      - name: Integration tests (mounts the real app in a DOM)
+        run: npm --prefix mobile run test:ui
+
+      - name: Upload the built app
+        uses: actions/upload-artifact@v4
+        with:
+          name: neural-swarm-app
+          path: dist/app
+          retention-days: 14
