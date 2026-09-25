@@ -24,10 +24,18 @@ const OWNER_EMAILS = new Set([
   "michaelkosminsky@gmail.com",
 ]);
 
+// Extra origins can be added with the ALLOWED_ORIGINS secret (comma
+// separated), e.g. "https://staging.example.com,https://studio.example.com".
+// Localhost is always allowed so `npm run dev` works against a deployed proxy.
 const ALLOWED_ORIGINS = new Set([
   "https://neural-swarm.vercel.app",
   "http://localhost:5173",
   "http://localhost:3000",
+  "http://127.0.0.1:5173",
+  ...(Deno.env.get("ALLOWED_ORIGINS") ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean),
 ]);
 
 // Ceiling on the owner's own key.

@@ -26,8 +26,23 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Unit tests
+        run: npm test
+
+      - name: Render smoke test
+        run: npm run test:render
+
+      - name: Click-through (desktop)
+        run: npm run test:dom
+
+      - name: Click-through (phone)
+        run: npm run test:mobile
+
       - name: Build
         run: npm run build
+
+      - name: PWA install audit
+        run: npm run audit:pwa
 
   deploy-staging:
     name: Deploy → Staging

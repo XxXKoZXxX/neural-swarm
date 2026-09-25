@@ -1,13 +1,63 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>neural-swarm</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Neural Swarm" />
+    <meta name="theme-color" content="#07090c" />
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <title>Neural Swarm — 10 AI agents. One goal. Shipped.</title>
+    <meta
+      name="description"
+      content="Neural Swarm is an AI agent orchestration studio: give it a goal and a swarm of specialised Claude and Gemini agents plans, builds, tests, audits and reviews it — with live preview, cost tracking and versioned history."
+    />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="application-name" content="Neural Swarm" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="preconnect" href="https://api.anthropic.com" />
+    <link rel="canonical" href="https://neural-swarm.vercel.app/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Neural Swarm" />
+    <meta property="og:url" content="https://neural-swarm.vercel.app/" />
+    <meta property="og:image" content="https://neural-swarm.vercel.app/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="A constellation of glowing agent nodes on a dark emerald mesh" />
+    <meta property="og:title" content="Neural Swarm — 10 AI agents. One goal. Shipped." />
+    <meta
+      property="og:description"
+      content="An AI engineering team in your browser. Orchestrated agent pipelines, live preview, security audits, a knowledge vault and full run history."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://neural-swarm.vercel.app/og-image.jpg" />
+    <meta name="twitter:title" content="Neural Swarm — 10 AI agents. One goal. Shipped." />
+    <meta
+      name="twitter:description"
+      content="Orchestrated multi-agent builds with live preview, cost tracking and versioned history. Bring your own key."
+    />
+    <script>
+      // Apply the saved theme before first paint so there is no white flash.
+      try {
+        var t = localStorage.getItem('ns.theme')
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t
+        else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+          document.documentElement.dataset.theme = 'light'
+        }
+      } catch (e) {
+        /* private mode / storage disabled - keep the dark default */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      Neural Swarm is a client-side app and needs JavaScript enabled to run.
+    </noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
