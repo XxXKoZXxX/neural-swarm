@@ -154,6 +154,24 @@ What makes it installable, and what `npm run audit:pwa` checks on every build:
 
 **Updating an installed app:** reload it and the new service worker takes over (it calls `skipWaiting` and claims clients), so there is no "stuck on an old version" state.
 
+### The separate app at `/app/`
+
+The studio above installs as an app on its own. There is also a second, separate
+app at `/app/` — same repository, different product: a phone-first client for
+talking to **any** provider's model (Anthropic, OpenAI, Gemini, OpenRouter, Groq,
+Mistral, xAI, or a local Ollama / LM Studio server) with the ten agents, Prompt
+Forge, the Vault, the Flow builder and versioned run history.
+
+| Platform | How |
+|---|---|
+| **Android** | Open `https://neural-swarm.vercel.app/app/` in Chrome, then **⋮ → Install app**. |
+| **iPhone / iPad** | Same URL in **Safari** → **Share** → **Add to Home Screen**. |
+
+It is built from `mobile/` by `scripts/build-all.mjs` on every deploy, so the app
+and the studio always ship together and neither can take the other down. Its own
+suite and an installability check run in the `App CI` workflow before it ships.
+Details and provider keys: [`mobile/README.md`](mobile/README.md).
+
 ## Privacy
 
 No backend by default. Runs, files, flows, vault items, memory and history live in your browser's `localStorage`; secrets live in `sessionStorage`; "Export all data" in Settings gives you a JSON copy and "Reset local data" removes it. Upgrading from the pre-makeover build migrates the old `ns_*` keys automatically, once.
