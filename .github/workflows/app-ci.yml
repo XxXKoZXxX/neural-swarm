@@ -28,6 +28,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: app-ci-${{ github.ref }}
@@ -59,64 +60,7 @@ jobs:
       - name: App must be present and installable
         run: |
           set -o pipefail
-          node -e "
-          const fs = require('fs');
-          const p = (f) => fs.existsSync('dist/app/' + f);
-          const m = JSON.parse(fs.readFileSync('dist/app/manifest.webmanifest', 'utf8'));
-          const sizes = m.icons.map(i => i.sizes);
-          const checks = [
-            ['manifest served under /app/', p('manifest.webmanifest')],
-            ['name', !!m.name],
-            ['short_name', !!m.short_name],
-            ['start_url', !!m.start_url],
-            ['display standalone', m.display === 'standalone'],
-            ['192px icon', sizes.includes('192x192')],
-            ['512px icon', sizes.includes('512x512')],
-            ['maskable icon', m.icons.some(i => i.purpose === 'maskable')],
-            ['service worker', p('sw.js')],
-            ['all three icons', ['192','512','maskable-512'].every(n => p('icons/icon-' + n + '.png'))],
-            ['app SPA fallback', p('404.html')],
-            ['site SPA fallback', fs.existsSync('dist/404.html')],
-            ['site entry intact', fs.existsSync('dist/index.html')],
-          ];
-          let bad = 0;
-          for (const [label, pass] of checks) {
-            console.log((pass ? '  ok   ' : '  FAIL ') + label);
-            if (!pass) bad++;
-          }
-          if (bad) { console.error('App is not installable at /app/.'); process.exit(1); }
-          console.log('App is installable at /app/ and the site is intact.');
-          " 2>&1 | tee /tmp/appcheck.log
-
-      # GitHub's log download endpoint has been returning EOF, so on failure the
-      # useful output is reposted as a PR comment where it can actually be read.
-      - name: Post build diagnostics
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          {
-            echo "App CI failed on \`${{ github.sha }}\`."
-            echo
-            echo "**build-all.mjs output**"
-            echo '```'
-            tail -30 /tmp/build.log 2>/dev/null || echo "(no build log)"
-            echo '```'
-            echo "**installability check**"
-            echo '```'
-            cat /tmp/appcheck.log 2>/dev/null || echo "(check never ran)"
-            echo '```'
-            echo "**dist/ tree**"
-            echo '```'
-            find dist -maxdepth 2 2>/dev/null | head -40 || echo "(no dist)"
-            echo '```'
-            echo "**mobile/dist tree**"
-            echo '```'
-            find mobile/dist -maxdepth 2 2>/dev/null | head -20 || echo "(no mobile/dist)"
-            echo '```'
-          } > /tmp/diag.md
-          pr=$(gh pr list --head "${{ github.ref_name }}" --json number -q '.[0].number' 2>/dev/null || true)
-          if [ -n "$pr" ]; then gh pr comment "$pr" --body-file /tmp/diag.md; else cat /tmp/diag.md; fi
+          node scripts/check-app-installable.mjs 2>&1 | tee /tmp/appcheck.log
 
       # Local base path sanity: the same source must also build for a domain root.
       - name: App still builds for a root deployment

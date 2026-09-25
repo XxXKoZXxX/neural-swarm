@@ -15,7 +15,8 @@
 // which fails loudly on test or installability problems.
 
 import { spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs'
+import { inspect } from './check-app-installable.mjs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -70,20 +71,13 @@ if (appBuilt) {
   cpSync(join(siteOut, 'index.html'), join(siteOut, '404.html'))
   cpSync(join(target, 'index.html'), join(target, '404.html'))
 
-  // Fail the app half only, never the site half, if the manifest is broken.
-  const manifest = JSON.parse(readFileSync(join(target, 'manifest.webmanifest'), 'utf8'))
-  const sizes = (manifest.icons || []).map((i) => i.sizes)
-  const missing = [
-    ['192px icon', sizes.includes('192x192')],
-    ['512px icon', sizes.includes('512x512')],
-    ['maskable icon', (manifest.icons || []).some((i) => i.purpose === 'maskable')],
-    ['service worker', existsSync(join(target, 'sw.js'))],
-    ['start_url', Boolean(manifest.start_url)],
-    ['display standalone', manifest.display === 'standalone'],
-  ].filter(([, pass]) => !pass)
+  // Shared with CI so both agree on what "installable" means.
+  const failed = inspect(target, siteOut).filter((r) => !r.pass)
+  const missing = failed.map((r) => r.label)
+  for (const r of failed) console.warn(`  missing: ${r.label}`)
 
   if (missing.length) {
-    console.warn(`App is missing installability requirements: ${missing.map(([n]) => n).join(', ')}`)
+    console.warn(`App is missing installability requirements: ${missing.join(', ')}`)
     console.warn('Removing /app/ from this deployment.')
     rmSync(target, { recursive: true, force: true })
     appBuilt = false
