@@ -96,47 +96,88 @@ jobs:
             package-lock.json
             mobile/package-lock.json
 
-      - name: Build the website
-        run: |
-          npm ci
-          npm run build
+      - name: Install root dependencies
+        run: npm ci
 
       - name: Build the app for the /app/ subpath
         working-directory: mobile
         run: |
           npm ci
           APP_BASE=/app/ npm run build
+          echo "--- app build ---"
+          ls dist
 
-      - name: Assemble one deployable tree
-        run: |
-          mkdir -p dist/app
-          cp -r mobile/dist/. dist/app/
-          cp dist/index.html dist/404.html
-          cp dist/app/index.html dist/app/404.html
-          echo "--- dist/app ---"
-          ls dist/app
-          echo "--- size ---"
-          du -sh dist
-
-      - name: Publish (prebuilt, so nothing is rebuilt remotely)
-        id: deploy
+      - name: Pull project settings and build the site
+        id: publish
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_NEURAL_SWARM }}
         run: |
-          set -o pipefail
-          npx --yes vercel@latest build --prod --yes --token="$VERCEL_TOKEN" 2>&1 | tee /tmp/build.log
-          npx --yes vercel@latest deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" 2>&1 | tee /tmp/deploy.log
+          # Deliberately no pipefail/tee on these: capture every exit code so a
+          # failure still leaves a complete log behind for the artifact upload.
+          set +e
+          log=/tmp/vercel.log
+          : > "$log"
+          v="npx --yes vercel@latest"
 
-          url=$(grep -Eo 'https://[a-z0-9.-]+\.vercel\.app' /tmp/deploy.log | tail -1)
+          echo "### vercel pull" | tee -a "$log"
+          $v pull --yes --environment=production --token="$VERCEL_TOKEN" >>"$log" 2>&1
+          rc_pull=$?
+          echo "exit=$rc_pull" >> "$log"
+
+          echo "### vercel build" | tee -a "$log"
+          $v build --prod --token="$VERCEL_TOKEN" >>"$log" 2>&1
+          rc_build=$?
+          echo "exit=$rc_build" >> "$log"
+
+          # vercel build re-runs the site build, so the app is injected into the
+          # prebuilt output here, after the site tree exists.
+          if [ "$rc_build" -eq 0 ] && [ -d .vercel/output/static ]; then
+            echo "### injecting the app" | tee -a "$log"
+            mkdir -p .vercel/output/static/app
+            cp -r mobile/dist/. .vercel/output/static/app/
+            cp .vercel/output/static/index.html .vercel/output/static/404.html
+            cp .vercel/output/static/app/index.html .vercel/output/static/app/404.html
+            ls .vercel/output/static/app >>"$log" 2>&1
+          else
+            echo "prebuilt output missing; skipping injection" >> "$log"
+          fi
+
+          echo "### vercel deploy" | tee -a "$log"
+          $v deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN" >>"$log" 2>&1
+          rc_deploy=$?
+          echo "exit=$rc_deploy" >> "$log"
+
+          echo "### log tail"
+          tail -50 "$log"
+
+          if [ "$rc_pull" -ne 0 ] || [ "$rc_build" -ne 0 ] || [ "$rc_deploy" -ne 0 ]; then
+            echo "::error::Publish failed (pull=$rc_pull build=$rc_build deploy=$rc_deploy). Full log attached as an artifact."
+            exit 1
+          fi
+
+          url=$(grep -Eo 'https://[a-z0-9.-]+\.vercel\.app' "$log" | tail -1)
           echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the deploy log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-deploy-log
+          path: /tmp/vercel.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Summary
+        if: success()
+        run: |
           {
             echo "## Neural Swarm app published"
             echo ""
-            echo "**Install URL:** ${url:-https://neural-swarm.vercel.app}/app/"
+            echo "**Install URL:** https://neural-swarm.vercel.app/app/"
             echo ""
-            echo "On the phone: open that URL in Chrome, then menu (top right) -> **Install app**."
+            echo "On the phone: open that URL in Chrome, then the menu (top right) -> **Install app**."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Report the failure on the PR
@@ -148,13 +189,12 @@ jobs:
             echo "App publish failed on \`${{ github.sha }}\`."
             echo
             echo '```'
-            tail -40 /tmp/build.log /tmp/deploy.log 2>/dev/null || echo "no log captured"
+            tail -50 /tmp/vercel.log 2>/dev/null || echo "no log file written"
             echo '```'
           } > /tmp/comment.md
           pr=$(gh pr list --head "${{ github.ref_name }}" --json number -q '.[0].number' 2>/dev/null || true)
           if [ -n "$pr" ]; then
             gh pr comment "$pr" --body-file /tmp/comment.md
           else
-            echo "No PR for this branch; dumping log instead."
             cat /tmp/comment.md
           fi
