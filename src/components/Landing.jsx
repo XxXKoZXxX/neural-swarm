@@ -57,26 +57,38 @@ export default function Landing({ onStart, onStartWithGoal, onSignIn, onOpenDocs
             studio
           </span>
         </div>
-        <div className="row gap-8">
-          <button className="btn btn-ghost" onClick={() => document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" })}>
+        <div className="row gap-8 landing-nav-actions">
+          <button className="btn btn-ghost hide-sm" onClick={() => document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" })}>
             Pricing
           </button>
-          <button className="btn btn-ghost" onClick={onOpenDocs}>
+          <button className="btn btn-ghost hide-sm" onClick={onOpenDocs}>
             Docs
           </button>
           <button className="btn btn-icon btn-ghost" onClick={onToggleTheme} aria-label="Toggle theme">
             <Icon name={theme === "dark" ? "sun" : "moon"} size={15} />
           </button>
-          <Button variant="ghost" onClick={onSignIn}>
+          <Button variant="ghost" className="hide-sm" onClick={onSignIn}>
             Sign in
           </Button>
-          <Button variant="primary" onClick={() => onStart()}>
+          <Button variant="primary" size="sm" onClick={() => onStart()}>
             Start free
           </Button>
         </div>
       </nav>
 
-      <section className="landing-section" style={{ borderTop: 0, paddingTop: 56 }}>
+      <nav className="landing-jump" aria-label="Sections">
+        {[
+          ["How it works", "how"],
+          ["Agents", "agents"],
+          ["Pricing", "pricing"],
+        ].map(([label, id]) => (
+          <button key={id} className="chip" onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      <section className="landing-section" id="how" style={{ borderTop: 0, paddingTop: 40 }}>
         <div className="landing-inner hero-grid">
           <div>
             <Badge tone="accent" icon="sparkles">
@@ -161,7 +173,7 @@ export default function Landing({ onStart, onStartWithGoal, onSignIn, onOpenDocs
         </div>
       </section>
 
-      <section className="landing-section">
+      <section className="landing-section" id="agents">
         <div className="landing-inner">
           <div className="section-label">The specialists</div>
           <h2 className="page-title mt-8" style={{ fontSize: 26 }}>

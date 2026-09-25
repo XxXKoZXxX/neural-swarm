@@ -9,10 +9,11 @@ import { hasCreds, streamModel } from "../lib/api.js";
  * Template marketplace: eight curated workflows, community submissions from
  * Supabase, and a generative search that writes a bespoke workflow on demand.
  */
-export default function Marketplace({ templates, purchased, onUse, onFork, onPublish, canPublish, onOpenTab, settings, goal }) {
+export default function Marketplace({ templates, purchased, onUse, onFork, onPublish, canPublish, onOpenTab, settings, goal, focusTemplate }) {
   const toast = useToast();
   const [cat, setCat] = useState("All");
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => templates.find((t) => t.id === focusTemplate)?.name || "");
+  const [highlight, setHighlight] = useState(focusTemplate || null);
   const [sort, setSort] = useState(SORTS[0]);
   const [genOpen, setGenOpen] = useState(false);
   const [genPrompt, setGenPrompt] = useState("");
@@ -69,8 +70,26 @@ export default function Marketplace({ templates, purchased, onUse, onFork, onPub
         </div>
       </div>
 
+      {highlight ? (
+        <div className="row between gap-10 inset mb-12" style={{ padding: "10px 12px", borderColor: "var(--accent-line)" }}>
+          <span className="small">
+            Showing <strong>{templates.find((t) => t.id === highlight)?.name || "one template"}</strong> — opened from search.
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setHighlight(null);
+              setQuery("");
+            }}
+          >
+            Show everything
+          </Button>
+        </div>
+      ) : null}
+
       <div className="toolbar mb-16">
-        <SearchInput value={query} onChange={setQuery} placeholder="Search templates…" onClear={() => setQuery("")} className="grow" />
+        <SearchInput value={query} onChange={setQuery} placeholder="Search templates…" onClear={() => { setQuery(""); setHighlight(null); }} className="grow" />
         <div className="row gap-4 wrap">
           {CATEGORIES.map((c) => (
             <button key={c} className="chip" aria-pressed={cat === c} onClick={() => setCat(c)}>

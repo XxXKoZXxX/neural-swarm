@@ -32,6 +32,12 @@ jobs:
       - name: Render smoke test
         run: npm run test:render
 
+      - name: Click-through (desktop)
+        run: npm run test:dom
+
+      - name: Click-through (phone)
+        run: npm run test:mobile
+
       - name: Build
         run: npm run build
 

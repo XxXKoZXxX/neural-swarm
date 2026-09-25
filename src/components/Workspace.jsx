@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Badge, Button, ConfirmDialog, EmptyState, Field, IconButton, Input, SearchInput, Select } from "./ui.jsx";
 import { useToast } from "../hooks/useToast.js";
+import { useIsMobile } from "../hooks/useMediaQuery.js";
 import { Icon } from "./icons.jsx";
 import { copyText, downloadBlob, downloadText, zipFiles } from "../lib/store.js";
 
@@ -10,9 +11,11 @@ const LANGS = ["text", "js", "jsx", "ts", "tsx", "html", "css", "scss", "json", 
  * Multi-file workspace: everything the swarm wrote, editable and exportable
  * as a ZIP. Cursor/Windsurf-style split of tree + editor.
  */
-export default function Workspace({ files, stats, addFile, updateFile, renameFile, removeFile, clearAll, onOpenTab }) {
+export default function Workspace({ files, stats, addFile, updateFile, renameFile, removeFile, clearAll, onOpenTab, routePath }) {
   const toast = useToast();
-  const [selected, setSelected] = useState(files[0]?.path || null);
+  const isMobile = useIsMobile();
+  // Deep links (#/files?path=src/app.js) win over the first file on load.
+  const [selected, setSelected] = useState(() => routePath || files[0]?.path || null);
   const [query, setQuery] = useState("");
   const [newOpen, setNewOpen] = useState(false);
   const [newPath, setNewPath] = useState("");
@@ -68,7 +71,22 @@ export default function Workspace({ files, stats, addFile, updateFile, renameFil
     <div>
       <Head stats={stats} onZip={downloadZip} files={files} onClear={() => setConfirmClear(true)} />
 
-      <div className="split">
+      {isMobile ? (
+        <div className="action-bar mb-12" style={{ padding: 10 }}>
+          <Select
+            aria-label="Choose a file"
+            className="grow"
+            value={active?.path || ""}
+            onChange={(e) => setSelected(e.target.value)}
+            options={files.map((f) => ({ value: f.path, label: `${f.path}${f.edited ? " •" : ""}` }))}
+          />
+          <IconButton name="plus" label="New file" onClick={() => setNewOpen(true)} />
+          <IconButton name="download" label="Download ZIP" onClick={downloadZip} />
+        </div>
+      ) : null}
+
+      <div className={isMobile ? "" : "split"}>
+        {!isMobile ? (
         <div className="card col" style={{ padding: 10, maxHeight: "72vh", overflow: "auto" }}>
           <div className="row gap-6 mb-8">
             <SearchInput value={query} onChange={setQuery} placeholder="Find file…" className="grow" onClear={() => setQuery("")} />
@@ -91,6 +109,7 @@ export default function Workspace({ files, stats, addFile, updateFile, renameFil
           ))}
           {!grouped.length ? <div className="dim tiny" style={{ padding: 12 }}>No file matches “{query}”.</div> : null}
         </div>
+        ) : null}
 
         <div className="col gap-12">
           {active ? (
@@ -141,18 +160,18 @@ export default function Workspace({ files, stats, addFile, updateFile, renameFil
                 value={active.code}
                 onChange={(e) => updateFile(active.path, e.target.value)}
                 aria-label={`${active.path} contents`}
-                style={{ borderRadius: 0, border: 0, minHeight: 460 }}
+                style={{ borderRadius: 0, border: 0, minHeight: isMobile ? 320 : 460 }}
               />
               <div className="row between" style={{ padding: "6px 12px", borderTop: "1px solid var(--border-soft)" }}>
                 <span className="dimmer tiny mono">
                   {active.code.split("\n").length} lines · {active.code.length} chars
                 </span>
-                <span className="dimmer tiny">Edits save automatically</span>
+                <span className="dimmer tiny">{isMobile ? "" : "Edits save automatically"}</span>
               </div>
             </div>
           ) : (
             <EmptyState icon="file" title="Select a file">
-              Pick a file from the tree to view and edit it.
+              {isMobile ? "Pick a file from the list above to view and edit it." : "Pick a file from the tree to view and edit it."}
             </EmptyState>
           )}
         </div>

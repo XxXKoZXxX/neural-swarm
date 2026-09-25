@@ -44,9 +44,9 @@ export function CopyButton({ value, label = "Copy", size = "sm" }) {
 }
 
 /* ── surfaces ───────────────────────────────────────────────────────────── */
-export function Card({ title, subtitle, actions, children, className = "", pad = true, style }) {
+export function Card({ title, subtitle, actions, children, className = "", pad = true, style, ref }) {
   return (
-    <section className={`card ${className}`.trim()} style={style}>
+    <section ref={ref} className={`card ${className}`.trim()} style={style}>
       {(title || actions) && (
         <header className="row between gap-12" style={{ padding: "12px 16px", borderBottom: "1px solid var(--border-soft)" }}>
           <div className="grow">

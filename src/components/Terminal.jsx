@@ -182,7 +182,7 @@ export default function Terminal({ swarm, settings, workspace, goal, onOpenTab }
                   </div>
                 ) : null}
               </div>
-              <div className="row gap-8" style={{ padding: 10, borderTop: "1px solid var(--border-soft)" }}>
+              <div className="row gap-8 term-bar" style={{ padding: 10, borderTop: "1px solid var(--border-soft)" }}>
                 <input
                   className="input input-mono"
                   placeholder="❯ /heal, /test, /review or any instruction…"

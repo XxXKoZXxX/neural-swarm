@@ -10,12 +10,13 @@ import { copyText, downloadText } from "../lib/store.js";
  * Run history: browse, search, compare two runs word-by-word, restore, branch
  * or delete. Works against Supabase when configured and local runs otherwise.
  */
-export default function History({ runs, loading, onRefresh, sbReady, onRestore, onBranch, onDelete, onToggleStar, onOpenTab }) {
+export default function History({ runs, loading, onRefresh, sbReady, onRestore, onBranch, onDelete, onToggleStar, onOpenTab, focusRun }) {
   const toast = useToast();
   const [query, setQuery] = useState("");
   const [branch, setBranch] = useState("all");
   const [viewRun, setViewRun] = useState(null);
-  const [pick, setPick] = useState([]);
+  // A deep link (#/history?run=r_12) pre-loads that run into the diff picker.
+  const [pick, setPick] = useState(() => (focusRun ? runs.filter((r) => r.id === focusRun).slice(0, 1) : []));
   const [diffing, setDiffing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
 
@@ -128,7 +129,15 @@ export default function History({ runs, loading, onRefresh, sbReady, onRestore, 
           {filtered.map((run) => {
             const selected = pick.some((p) => p.id === run.id);
             return (
-              <div key={run.id} className="card row between gap-12" style={{ padding: "12px 14px", borderColor: selected ? "var(--accent)" : "var(--border)" }}>
+              <div
+                key={run.id}
+                className="card row between gap-12"
+                style={{
+                  padding: "12px 14px",
+                  borderColor: selected ? "var(--accent)" : run.id === focusRun ? "var(--accent-line)" : "var(--border)",
+                  boxShadow: run.id === focusRun ? "var(--glow)" : undefined,
+                }}
+              >
                 <div className="row gap-10 grow" style={{ minWidth: 0 }}>
                   <button className="btn btn-icon btn-ghost" onClick={() => togglePick(run)} aria-label="Select for comparison" style={{ color: selected ? "var(--accent)" : undefined }}>
                     {selected ? <span className="mono tiny">{pick.findIndex((p) => p.id === run.id) + 1}</span> : <span className="dot" style={{ background: "var(--border-strong)" }} />}

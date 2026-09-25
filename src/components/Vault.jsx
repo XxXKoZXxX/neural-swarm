@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Card, ConfirmDialog, EmptyState, Field, IconButton, Input, Modal, SearchInput, Select, Textarea } from "./ui.jsx";
 import { useToast } from "../hooks/useToast.js";
 import { Icon } from "./icons.jsx";
@@ -8,7 +8,8 @@ import { uid } from "../lib/constants.js";
 const TAGS = ["Security", "Architecture", "Code snippet", "Research", "Prompt", "Decision", "Other"];
 
 /** Neural Vault: the knowledge base that feeds future runs. */
-export default function Vault({ items, setItems, onInjectGoal, onOpenTab }) {
+export default function Vault({ items, setItems, onInjectGoal, onOpenTab, focusItem }) {
+  const focusRef = useRef(null);
   const toast = useToast();
   const [query, setQuery] = useState("");
   const [tag, setTag] = useState("all");
@@ -17,15 +18,24 @@ export default function Vault({ items, setItems, onInjectGoal, onOpenTab }) {
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
 
-  const filtered = useMemo(
-    () =>
-      items.filter(
-        (i) =>
-          (tag === "all" || i.tag === tag) &&
-          (!query || `${i.title} ${i.content}`.toLowerCase().includes(query.toLowerCase())),
-      ),
-    [items, query, tag],
-  );
+  const filtered = useMemo(() => {
+    const list = items.filter(
+      (i) =>
+        (tag === "all" || i.tag === tag) &&
+        (!query || `${i.title} ${i.content}`.toLowerCase().includes(query.toLowerCase())),
+    );
+    // A note opened from search should be the first thing on screen.
+    if (!focusItem) return list;
+    const index = list.findIndex((i) => i.id === focusItem);
+    if (index <= 0) return list;
+    return [list[index], ...list.filter((i) => i.id !== focusItem)];
+  }, [focusItem, items, query, tag]);
+
+  useEffect(() => {
+    if (!focusItem) return undefined;
+    const timer = setTimeout(() => focusRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" }), 60);
+    return () => clearTimeout(timer);
+  }, [focusItem]);
 
   const save = (item) => {
     setItems((prev) => {
@@ -103,6 +113,8 @@ export default function Vault({ items, setItems, onInjectGoal, onOpenTab }) {
           {filtered.map((item) => (
             <Card
               key={item.id}
+              className={item.id === focusItem ? "focus-ring" : ""}
+              style={item.id === focusItem ? { borderColor: "var(--accent-line)", boxShadow: "var(--glow)" } : undefined}
               title={item.pinned ? `★ ${item.title}` : item.title}
               subtitle={new Date(item.created_at).toLocaleDateString()}
               actions={
@@ -112,6 +124,7 @@ export default function Vault({ items, setItems, onInjectGoal, onOpenTab }) {
                   <IconButton name="trash" label="Delete" size={13} onClick={() => setConfirmDelete(item)} />
                 </>
               }
+              ref={item.id === focusItem ? focusRef : undefined}
             >
               <div className="row gap-6 mb-8">
                 <Badge>{item.tag}</Badge>

@@ -11,6 +11,16 @@ Give Neural Swarm an outcome. The planner picks the smallest team that can finis
 
 ---
 
+## Navigation
+
+The app is built to be walked without instructions:
+
+- **Deep links for everything.** Every view has an address — `#/files?path=src/app.js`, `#/history?run=r_12`, `#/vault?item=v_3`, `#/preview?device=mobile`. Share a link and the recipient lands on the same screen with the same file open.
+- **Back works.** It is real browser navigation, so the back button and forward button step through views, exactly as expected.
+- **One search box for the whole app** (`⌘K`, `Ctrl K` or `/`). It searches views, actions, files by path, runs by goal, vault notes and templates — grouped, ranked and keyboard driven.
+- **On a phone:** a five-slot tab bar (Studio · Preview · Files · Terminal · More) plus a full-screen sheet with the other eight views, recent runs, install-as-app, theme, settings and account. Nothing scrolls off-screen, every target is thumb-sized, and you can **swipe left/right** to move between views.
+- **Desktop:** the rail keeps its groups, remembers whether you collapsed it, and gains a breadcrumb bar with a Back button.
+
 ## The studio
 
 | View | What it is |
@@ -84,6 +94,7 @@ Node 22+.
 | `npm test` | 31 unit tests for the pure logic (no dependencies — `node:test`). |
 | `npm run test:render` | Server-renders all 19 top-level views and asserts their markup. |
 | `npm run test:dom` | Mounts the real app in jsdom and drives it: land → studio → every nav item → settings → ⌘K → theme → a full offline run → history → files → preview → script export. |
+| `npm run test:mobile` | Same app at 390 × 844: tab bar, all-views sheet, swipe, deep links, browser back, the phone file picker and settings. |
 | `npm run test:all` | Everything above, in that order. |
 | `npm run sentinel` | CI-failure triage helper (`--dry-run` to preview without filing an issue). |
 
@@ -101,19 +112,30 @@ src/
     api.js                streaming model layer, orchestrator, parsers, diff, simulation
     store.js              storage, Supabase REST, downloads, ZIP, migration
     scripts.js            run → Node / Python / cURL exporters
+    router.js             parse/serialise routes (pure, unit-tested)
+    nav.js                the navigation model (rail, tab bar, sheet, palette)
   hooks/
     useSwarm.js           plan → agents → overseer, abort, retry
     useWorkspace.js       code fences → files (never clobbers your edits)
     usePersistedState.js  localStorage/sessionStorage state
+    useRoute.js           hash routing (useSyncExternalStore)
+    useMediaQuery.js      layout-critical breakpoints
+    useInstallPrompt.js   PWA install flow
     useToast.js           toast context
-  components/             ui.jsx, icons.jsx, Markdown.jsx + one file per view
+  components/             ui.jsx, icons.jsx, Markdown.jsx, Shell.jsx,
+                          CommandPalette.jsx, MobileNav.jsx + one file per view
 tests/
   logic.test.js           unit tests
   smoke-entry.jsx         server-render smoke test
-  dom-entry.jsx           jsdom click-through
+  dom-entry.jsx           jsdom click-through (desktop)
+  mobile-entry.jsx        jsdom click-through (390px phone)
 ```
 
 Zero UI dependencies: the icons, markdown renderer, syntax highlighter, charts, modal/drawer system and ZIP writer are all in this repo (React, React DOM and `@vercel/speed-insights` are the only runtime imports).
+
+## Install it
+
+The production build registers a service worker and ships a web app manifest, so the studio installs to a home screen and opens full-screen with no browser chrome. Navigations are network-first (a deploy is never masked by a stale cache), assets are stale-while-revalidate, and model calls are never cached. Chromium browsers get an **Install as an app** button in the phone sheet; on iOS it explains the Share → Add to Home Screen route.
 
 ## Privacy
 

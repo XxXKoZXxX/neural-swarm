@@ -10,7 +10,8 @@
     "test": "node --test \"tests/*.test.js\"",
     "test:render": "vite build --ssr tests/smoke-entry.jsx --outDir .smoke --logLevel error && node .smoke/smoke-entry.js",
     "test:dom": "vite build --ssr tests/dom-entry.jsx --outDir .smoke --logLevel error && node .smoke/dom-entry.js",
-    "test:all": "npm run lint && npm test && npm run test:render && npm run test:dom",
+    "test:mobile": "vite build --ssr tests/mobile-entry.jsx --outDir .smoke --logLevel error && node .smoke/mobile-entry.js",
+    "test:all": "npm run lint && npm test && npm run test:render && npm run test:dom && npm run test:mobile",
     "preview": "vite preview",
     "sentinel": "node sentinel.js",
     "sentinel:dry": "node sentinel.js --dry-run"

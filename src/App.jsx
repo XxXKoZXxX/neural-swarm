@@ -19,8 +19,10 @@ import { Button, Modal } from "./components/ui.jsx";
 import { useToast } from "./hooks/useToast.js";
 import { Icon } from "./components/icons.jsx";
 import { useSwarm } from "./hooks/useSwarm.js";
+import useRoute from "./hooks/useRoute.js";
 import useWorkspace from "./hooks/useWorkspace.js";
 import { AGENTS, BUILTIN_TEMPLATES, DEFAULT_MODEL, FREE_LIMIT, PLAN_TOKENS, STORAGE, uid } from "./lib/constants.js";
+import { TAB_ORDER } from "./lib/router.js";
 import { downloadText, mkDb, readSession, readStored, writeSession, writeStored } from "./lib/store.js";
 
 const DEFAULT_SETTINGS = {
@@ -53,8 +55,11 @@ const currentMonth = () => new Date().getMonth();
 
 export default function App() {
   const toast = useToast();
-  const [view, setView] = useState("landing");
-  const [tab, setTab] = useState("swarm");
+  // Every view is addressable (#/files?path=src/app.js) so back/forward and
+  // shared links work. `home` is the bare hash — the landing page.
+  const { home, tab, params, navigate, goHome, goBack } = useRoute();
+  const view = home ? "landing" : "studio";
+  const openTab = useCallback((next, nextParams = {}) => navigate(next, nextParams), [navigate]);
   const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || "dark");
   const [goal, setGoal] = useState("");
   const [docsOpen, setDocsOpen] = useState(false);
@@ -318,12 +323,11 @@ export default function App() {
       if (params.get("purchase") === "success") {
         const id = params.get("template");
         if (id) setPurchased((prev) => [...new Set([...prev, id])]);
-        window.history.replaceState({}, "", window.location.pathname);
-        setView("studio");
-        setTab("market");
+        // Drop the Stripe query string but keep the hash route intact.
+        window.history.replaceState({}, "", `${window.location.pathname}#/market`);
         toast.success("Purchase confirmed");
       } else if (params.get("upgraded") === "true") {
-        window.history.replaceState({}, "", window.location.pathname);
+        window.history.replaceState({}, "", `${window.location.pathname}${window.location.hash || "#/swarm"}`);
         loadPlan();
         toast.info("Checking your subscription…");
       } else {
@@ -331,7 +335,7 @@ export default function App() {
       }
     }, 0);
     return () => clearTimeout(timer);
-  }, [loadPlan, toast]);
+  }, [loadPlan, openTab, toast]);
 
   useEffect(() => {
     if (typeof Notification !== "undefined" && Notification.permission === "default") Notification.requestPermission().catch(() => {});
@@ -346,14 +350,13 @@ export default function App() {
         toast.warn("Swarm stopped");
       }
       if (/^[1-9]$/.test(e.key) && !typing && !e.metaKey && !e.ctrlKey && view === "studio") {
-        const order = ["swarm", "preview", "files", "terminal", "canvas", "security", "research", "vault", "market"];
-        const next = order[Number(e.key) - 1];
-        if (next) setTab(next);
+        const next = TAB_ORDER[Number(e.key) - 1];
+        if (next) openTab(next);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [swarm, toast, view]);
+  }, [openTab, swarm, toast, view]);
 
   /* ── actions ─────────────────────────────────────────────────────────── */
   const exportAllData = useCallback(() => {
@@ -405,7 +408,7 @@ export default function App() {
     async (template) => {
       const g = template.goal || "";
       setGoal(g);
-      setTab("swarm");
+      openTab("swarm");
       if (Number(template.price) > 0 && !purchased.includes(template.id)) {
         try {
           if (!settings.supabaseUrl) throw new Error("Set your Supabase URL in Settings to enable purchases.");
@@ -435,7 +438,7 @@ export default function App() {
         toast.success(`Loaded “${template.name}” into the studio`);
       }
     },
-    [jwt, purchased, settings, swarm, toast],
+    [jwt, openTab, purchased, settings, swarm, toast],
   );
 
   const publishTemplate = useCallback(
@@ -488,13 +491,13 @@ export default function App() {
     }
     if (!goal.trim()) {
       setGoal(SAMPLE_GOAL);
-      setTab("swarm");
+      openTab("swarm");
       toast.info("Loaded a sample goal — press Launch when you are ready.");
       return;
     }
-    setTab("swarm");
+    openTab("swarm");
     toast.info("Press Launch in the studio to start the run.");
-  }, [goal, isGated, toast]);
+  }, [goal, isGated, openTab, toast]);
 
   const themeToggle = useCallback(() => setTheme((t) => (t === "dark" ? "light" : "dark")), []);
 
@@ -508,14 +511,12 @@ export default function App() {
             theme={theme}
             onToggleTheme={themeToggle}
             onStart={(wanted) => {
-              setView("studio");
-              setTab("swarm");
+              openTab("swarm");
               if (wanted && wanted !== "free") setUpgradeOpen(true);
             }}
             onStartWithGoal={(preset) => {
               setGoal(preset);
-              setView("studio");
-              setTab("swarm");
+              openTab("swarm");
             }}
             onSignIn={() => setAuthOpen(true)}
             onOpenDocs={() => setDocsOpen(true)}
@@ -527,7 +528,7 @@ export default function App() {
             onClose={() => setDocsOpen(false)}
             onStart={() => {
               setDocsOpen(false);
-              setView("studio");
+              openTab("swarm");
             }}
           />
         ) : null}
@@ -573,7 +574,9 @@ export default function App() {
       <NeuralBackground agOut={swarm.outputs} phase={swarm.phase} />
       <Shell
         tab={tab}
-        setTab={setTab}
+        openTab={openTab}
+        params={params}
+        goBack={goBack}
         theme={theme}
         onToggleTheme={themeToggle}
         swarm={swarm}
@@ -593,8 +596,9 @@ export default function App() {
         counts={counts}
         onClearLocal={clearLocalData}
         onExportAll={exportAllData}
-        onHome={() => setView("landing")}
+        onHome={() => goHome()}
         runNow={runNow}
+        search={{ files: workspace.files, runs, vault, templates }}
       >
         {tab === "swarm" ? (
           <SwarmView
@@ -608,15 +612,15 @@ export default function App() {
             setGoal={setGoal}
             isGated={isGated}
             onUpgrade={() => setUpgradeOpen(true)}
-            onOpenTab={setTab}
+            onOpenTab={openTab}
             onSaveTemplate={() => setPublishOpen(true)}
             planLimit={plan === "free" ? 4 : 10}
           />
         ) : null}
-        {tab === "preview" ? <PreviewStudio swarm={swarm} goal={goal} onOpenTab={setTab} /> : null}
-        {tab === "files" ? <Workspace {...workspace} onOpenTab={setTab} /> : null}
-        {tab === "terminal" ? <Terminal swarm={swarm} settings={settings} workspace={workspace} goal={goal} onOpenTab={setTab} /> : null}
-        {tab === "canvas" ? <Canvas goal={goal} swarm={swarm} onOpenTab={setTab} isGated={isGated} onUpgrade={() => setUpgradeOpen(true)} /> : null}
+        {tab === "preview" ? <PreviewStudio swarm={swarm} goal={goal} onOpenTab={openTab} routeDevice={params.device} /> : null}
+        {tab === "files" ? <Workspace key={params.path || "files"} {...workspace} onOpenTab={openTab} routePath={params.path} /> : null}
+        {tab === "terminal" ? <Terminal swarm={swarm} settings={settings} workspace={workspace} goal={goal} onOpenTab={openTab} /> : null}
+        {tab === "canvas" ? <Canvas goal={goal} swarm={swarm} onOpenTab={openTab} isGated={isGated} onUpgrade={() => setUpgradeOpen(true)} /> : null}
         {tab === "security" ? (
           <SecurityDesk
             settings={settings}
@@ -624,7 +628,7 @@ export default function App() {
             onUpgrade={() => setUpgradeOpen(true)}
             onSaveVault={(title, content, tag) => setVault((v) => [{ id: uid("v"), title, content, tag, created_at: new Date().toISOString() }, ...v])}
             setGoal={setGoal}
-            onOpenTab={setTab}
+            onOpenTab={openTab}
           />
         ) : null}
         {tab === "research" ? (
@@ -635,20 +639,24 @@ export default function App() {
             onSaveVault={(title, content, tag) => setVault((v) => [{ id: uid("v"), title, content, tag, created_at: new Date().toISOString() }, ...v])}
             onInjectGoal={(g) => {
               setGoal(g);
-              setTab("swarm");
+              openTab("swarm");
             }}
           />
         ) : null}
         {tab === "vault" ? (
           <Vault
+            key={params.item || "vault"}
+            focusItem={params.item}
             items={vault}
             setItems={setVault}
             onInjectGoal={(content) => setGoal((g) => (g ? `${g}\n\n[VAULT CONTEXT]:\n${content}` : content))}
-            onOpenTab={setTab}
+            onOpenTab={openTab}
           />
         ) : null}
         {tab === "market" ? (
           <Marketplace
+            key={params.template || "market"}
+            focusTemplate={params.template}
             templates={templates}
             purchased={new Set(purchased)}
             settings={settings}
@@ -657,28 +665,30 @@ export default function App() {
             onUse={useTemplate}
             onFork={(t) => {
               setGoal(t.goal || "");
-              setTab("swarm");
+              openTab("swarm");
               toast.info(`Forked “${t.name}” into the studio`);
             }}
             onPublish={() => setPublishOpen(true)}
-            onOpenTab={setTab}
+            onOpenTab={openTab}
           />
         ) : null}
         {tab === "history" ? (
           <History
+            key={params.run || "history"}
+            focusRun={params.run}
             runs={runs}
             loading={runsLoading}
             sbReady={Boolean(db)}
             onRefresh={loadRuns}
-            onOpenTab={setTab}
+            onOpenTab={openTab}
             onRestore={(run) => {
               setGoal(run.goal || "");
-              setTab("swarm");
+              openTab("swarm");
               toast.info("Run restored into the studio");
             }}
             onBranch={(run) => {
               setGoal(run.goal || "");
-              setTab("swarm");
+              openTab("swarm");
               toast.info("Branched — tweak the goal and launch");
             }}
             onDelete={async (run) => {
@@ -693,7 +703,7 @@ export default function App() {
             }}
           />
         ) : null}
-        {tab === "insights" ? <Insights runs={runs} plan={plan} onOpenTab={setTab} /> : null}
+        {tab === "insights" ? <Insights runs={runs} plan={plan} onOpenTab={openTab} /> : null}
         {tab === "brain" ? <Brain memory={memory} setMemory={setMemory} runCount={usage.count} /> : null}
       </Shell>
 

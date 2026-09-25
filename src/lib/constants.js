@@ -273,4 +273,5 @@ export const STORAGE = {
   onboarded: "ns.onboarded",
   usage: "ns.usage",
   history: "ns.history",
+  ui: "ns.ui",
 };

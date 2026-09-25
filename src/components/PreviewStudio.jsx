@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, EmptyState, Segmented } from "./ui.jsx";
 import { useToast } from "../hooks/useToast.js";
+import { useIsMobile } from "../hooks/useMediaQuery.js";
 import { Icon } from "./icons.jsx";
 import Markdown from "./Markdown.jsx";
 import { buildPreviewDoc, extractCodeFiles } from "../lib/api.js";
 import { copyText, downloadText } from "../lib/store.js";
 
 const DEVICES = {
-  desktop: { label: "Desktop", width: "100%", icon: "grid" },
+  desktop: { label: "Desktop", width: "100%", icon: "monitor" },
   tablet: { label: "Tablet", width: "820px", icon: "layers" },
-  mobile: { label: "Mobile", width: "390px", icon: "cpu" },
+  mobile: { label: "Mobile", width: "390px", icon: "phone" },
 };
 
 const CONSOLE_BRIDGE = `<script>
@@ -22,9 +23,11 @@ const CONSOLE_BRIDGE = `<script>
 </script>`;
 
 /** Live preview of whatever the swarm produced, v0/Bolt style. */
-export default function PreviewStudio({ swarm, goal, onOpenTab }) {
+export default function PreviewStudio({ swarm, goal, onOpenTab, routeDevice }) {
   const toast = useToast();
-  const [device, setDevice] = useState("desktop");
+  const isMobile = useIsMobile();
+  // On a phone the honest default is the phone frame; deep links can override.
+  const [device, setDevice] = useState(() => (routeDevice && DEVICES[routeDevice] ? routeDevice : isMobile ? "mobile" : "desktop"));
   const [tab, setTab] = useState("preview");
   const [nonce, setNonce] = useState(0);
   const [messages, setMessages] = useState([]);
@@ -92,7 +95,7 @@ export default function PreviewStudio({ swarm, goal, onOpenTab }) {
     <div>
       <PageHead files={files} errors={errors} />
 
-      <div className="toolbar mb-12">
+      <div className="toolbar mb-12 wrap">
         <Segmented value={tab} onChange={setTab} options={[{ value: "preview", label: "Preview", icon: "play" }, { value: "spec", label: "Spec", icon: "file" }]} />
         {tab === "preview" ? <Segmented value={device} onChange={setDevice} options={Object.entries(DEVICES).map(([v, d]) => ({ value: v, label: d.label, icon: d.icon }))} /> : null}
         <span className="grow" />
@@ -138,14 +141,16 @@ export default function PreviewStudio({ swarm, goal, onOpenTab }) {
               </span>
               <Badge tone={errors ? "danger" : "accent"}>{errors ? `${errors} error${errors === 1 ? "" : "s"}` : "no errors"}</Badge>
             </div>
-            <iframe
-              key={`${nonce}-${device}`}
-              ref={iframeRef}
-              title="Swarm preview"
-              srcDoc={doc}
-              sandbox="allow-scripts allow-forms allow-popups allow-modals"
-              style={{ width: "100%", height: 560, border: 0, background: "#fff", display: "block" }}
-            />
+            <div className="iframe-shell">
+              <iframe
+                key={`${nonce}-${device}`}
+                ref={iframeRef}
+                title="Swarm preview"
+                srcDoc={doc}
+                sandbox="allow-scripts allow-forms allow-popups allow-modals"
+                style={{ width: "100%", height: "100%", border: 0, background: "#fff", display: "block" }}
+              />
+            </div>
           </div>
 
           <div className="card">

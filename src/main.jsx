@@ -69,6 +69,15 @@ class ErrorBoundary extends Component {
   }
 }
 
+// Offline shell + installability. Dev is skipped so HMR is never intercepted.
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
+      /* offline support is a bonus, never a blocker */
+    });
+  });
+}
+
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <ErrorBoundary>

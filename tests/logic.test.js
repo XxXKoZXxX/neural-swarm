@@ -29,6 +29,8 @@ import {
 } from "../src/lib/constants.js";
 import { crc32, migrateLegacyStorage, toCsv, zipFiles } from "../src/lib/store.js";
 import { buildRunScript } from "../src/lib/scripts.js";
+import { DEFAULT_TAB, isTab, parseRoute, routeHref, TAB_ORDER } from "../src/lib/router.js";
+import { NAV, NAV_ITEMS, PRIMARY_TABS } from "../src/lib/nav.js";
 
 /* ── constants ───────────────────────────────────────────────────────────── */
 test("agent catalogue is intact", () => {
@@ -334,4 +336,39 @@ test("exported scripts reproduce the plan without leaking a key", () => {
   // A script built from an empty plan still runs the goal through one agent.
   const fallback = buildRunScript({ format: "node", goal: "just this" });
   assert.match(fallback, /"CODER"/);
+});
+
+/* ── routing ─────────────────────────────────────────────────────────────── */
+test("the route table and the navigation agree", () => {
+  assert.equal(new Set(TAB_ORDER).size, TAB_ORDER.length, "duplicate tab ids");
+  assert.deepEqual(
+    NAV.flatMap((g) => g.items.map((i) => i.id)).sort(),
+    [...TAB_ORDER].sort(),
+    "every rail entry must be routable (and vice versa)",
+  );
+  assert.ok(PRIMARY_TABS.every(isTab), "tab bar entries must be real views");
+  assert.ok(PRIMARY_TABS.length <= 4, "leave a slot for More in the phone tab bar");
+});
+
+test("parseRoute handles the landing page, views and deep links", () => {
+  assert.deepEqual(parseRoute(""), { home: true, tab: DEFAULT_TAB, params: {} });
+  assert.deepEqual(parseRoute("#/"), { home: true, tab: DEFAULT_TAB, params: {} });
+
+  const files = parseRoute("#/files?path=src%2Fapp%20name.js");
+  assert.equal(files.home, false);
+  assert.equal(files.tab, "files");
+  assert.equal(files.params.path, "src/app name.js");
+
+  assert.equal(parseRoute("#/history?run=r_12&x=1").params.run, "r_12");
+  assert.equal(parseRoute("#/nope").tab, DEFAULT_TAB, "unknown views fall back, never throw");
+  assert.equal(parseRoute("#/terminal").tab, "terminal");
+});
+
+test("routeHref round-trips through parseRoute", () => {
+  const href = routeHref("files", { path: "a b/c+d.ts" });
+  assert.equal(href, "#/files?path=a%20b%2Fc%2Bd.ts");
+  assert.equal(parseRoute(href).params.path, "a b/c+d.ts");
+
+  assert.equal(routeHref("swarm", { empty: "", missing: null }), "#/swarm");
+  assert.equal(routeHref("bogus"), `#/${DEFAULT_TAB}`, "unknown tabs normalise");
 });

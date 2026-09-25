@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, EmptyState, Field, IconButton, Input, Select } from "./ui.jsx";
 import { useToast } from "../hooks/useToast.js";
+import { useIsMobile } from "../hooks/useMediaQuery.js";
 import { Icon } from "./icons.jsx";
 import { AGENT_KEYS, FLOW_PRESETS, STORAGE, getAgent, uid } from "../lib/constants.js";
 import { readStored, writeStored } from "../lib/store.js";
@@ -41,6 +42,7 @@ export default function Canvas({ goal, swarm, onOpenTab, isGated, onUpgrade }) {
   const [addAgent, setAddAgent] = useState(AGENT_KEYS[0]);
   const [flows, setFlows] = useState(() => readStored(STORAGE.flows, []));
   const [flowName, setFlowName] = useState("");
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     writeStored(STORAGE.flows, flows);
@@ -99,6 +101,20 @@ export default function Canvas({ goal, swarm, onOpenTab, isGated, onUpgrade }) {
   };
 
   const chain = cyclic ? [] : order.map((id) => nodes.find((n) => n.id === id)).filter(Boolean);
+
+  /** Rebuild the edges so the graph runs in exactly this order. */
+  const setChainOrder = (ordered) => {
+    setEdges(ordered.slice(0, -1).map((n, i) => ({ id: `e_${n.id}_${ordered[i + 1].id}`, from: n.id, to: ordered[i + 1].id })));
+    setNodes(ordered.map((n, i) => ({ ...n, x: 60 + i * 190, y: 120 + (i % 2) * 90 })));
+  };
+
+  const move = (index, delta) => {
+    const next = [...chain];
+    const target = index + delta;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    setChainOrder(next);
+  };
 
   const launch = async () => {
     if (isGated) return onUpgrade?.();
@@ -249,6 +265,40 @@ export default function Canvas({ goal, swarm, onOpenTab, isGated, onUpgrade }) {
 
         {!nodes.length ? <EmptyState icon="flow" title="No agents on the canvas" action={<Button icon="plus" onClick={() => loadPreset(FLOW_PRESETS[0])}>Load the first preset</Button>} /> : null}
       </div>
+
+      {isMobile ? (
+        <div className="card mt-12" style={{ padding: 12 }}>
+          <div className="row between gap-8">
+            <span className="strong small">Run order</span>
+            <span className="dimmer tiny">top to bottom</span>
+          </div>
+          <p className="tiny muted mt-4">Reordering on a phone beats dragging: move a step up or down and the links rebuild themselves.</p>
+          <div className="col gap-6 mt-10">
+            {chain.map((node, index) => {
+              const agent = getAgent(node.name);
+              return (
+                <div key={node.id} className="row gap-8 inset" style={{ padding: "6px 8px" }}>
+                  <span className="dimmer tiny mono" style={{ width: 18 }}>
+                    {index + 1}
+                  </span>
+                  <span style={{ color: agent.color }}>{agent.icon}</span>
+                  <span className="small truncate grow">{node.name}</span>
+                  <IconButton name="chevronDown" label={`Move ${node.name} down`} size={14} onClick={() => move(index, 1)} />
+                  <IconButton name="chevronLeft" label={`Move ${node.name} up`} size={14} onClick={() => move(index, -1)} />
+                  <IconButton name="trash" label={`Remove ${node.name}`} size={14} onClick={() => removeNode(node.id)} />
+                </div>
+              );
+            })}
+            {!chain.length ? <div className="dim tiny" style={{ padding: 8 }}>No steps yet — add an agent above.</div> : null}
+          </div>
+          <div className="row gap-8 mt-10">
+            <Select aria-label="Agent to append" className="grow" value={addAgent} onChange={(e) => setAddAgent(e.target.value)} options={AGENT_KEYS} />
+            <Button size="sm" icon="plus" onClick={addNode}>
+              Append
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="row between wrap gap-12 mt-12">
         <div className="row gap-8 wrap">
