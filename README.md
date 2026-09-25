@@ -8,6 +8,8 @@ Give Neural Swarm a goal. An orchestrator plans the execution. Agents run in seq
 [![Pages](https://github.com/XxXKoZXxX/neural-swarm/actions/workflows/pages.yml/badge.svg)](https://github.com/XxXKoZXxX/neural-swarm/actions/workflows/pages.yml)
 
 **Live demo:** [neural-swarm.vercel.app](https://neural-swarm.vercel.app) · **Mirror:** [xxxkozxxx.github.io/neural-swarm](https://xxxkozxxx.github.io/neural-swarm/) · **Get access:** [Gumroad](https://xxxxxkozxxxxx.gumroad.com)
+**📱 Android app:** [mobile/](mobile/) — the whole platform as an installable app. Any model, any time, no browser tab. Setup: [mobile/README.md](mobile/README.md)
+
 
 ---
 
@@ -17,6 +19,7 @@ Give Neural Swarm a goal. An orchestrator plans the execution. Agents run in seq
 - **🛡 Security audit desk**: Point it at a repo or paste code for a three-stage `RESEARCHER → DEBUGGER → REVIEWER` pass with severity ratings and patch diffs.
 - **💰 Cost shown per run**: Token usage and estimated spend are tracked live and attached to every saved run. No markup — you bring your own API key.
 - **🕸 Visual DAG flow builder**: Drag, configure, and execute custom agent execution graphs.
+- **📱 Runs as an app on your phone**: Install it and Neural Swarm opens full-screen from your launcher with an offline shell, a PIN lock and a share target — every feature, any model, no browser tab.
 
 ---
 
@@ -186,7 +189,16 @@ create table templates (
 ## Tech Stack
 
 | Layer | Tech |
-|-------|------|
+|
+### 📱 Or use it as an app
+
+```bash
+cd mobile && npm install && npm run dev   # open the printed URL on your phone
+```
+
+Install guide — Android and iPhone, provider keys, free local models: [mobile/README.md](mobile/README.md)
+
+-------|------|
 | Frontend | React 19 + Vite 8 |
 | AI | Anthropic Claude Sonnet 4 — streaming SSE |
 | Auth + DB | Supabase (optional) |

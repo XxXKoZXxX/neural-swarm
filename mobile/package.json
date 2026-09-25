@@ -1,0 +1,24 @@
+{
+  "name": "neural-swarm-app",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Standalone installable Neural Swarm app — any model, any time, on your phone.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node scripts/selftest.mjs",
+    "test:ui": "node scripts/uitest.mjs",
+    "icons": "bash scripts/make-icons.sh"
+  },
+  "dependencies": {
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.1",
+    "jsdom": "^30.1.1",
+    "vite": "^8.0.9"
+  }
+}
