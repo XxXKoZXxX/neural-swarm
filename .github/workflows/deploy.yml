@@ -26,6 +26,12 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Unit tests
+        run: npm test
+
+      - name: Render smoke test
+        run: npm run test:render
+
       - name: Build
         run: npm run build
 

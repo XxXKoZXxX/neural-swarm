@@ -1,212 +1,128 @@
 # ⬡ Neural Swarm
 
-> **10 specialized AI agents. One goal. Autonomous production-grade execution.**
+> **Ten specialised agents. One goal. A studio you can actually work in.**
 
-Give Neural Swarm a goal. An orchestrator plans the execution. Agents run in sequence — architecting, coding, testing, auditing, and reviewing. Every run is versioned, scored, and saved.
+Give Neural Swarm an outcome. The planner picks the smallest team that can finish it, the agents stream their work through a live rail, and the Overseer scores the delivery against your original goal. Everything that comes out is editable, previewable, diffable and exportable.
 
 [![CI](https://github.com/XxXKoZXxX/neural-swarm/actions/workflows/deploy.yml/badge.svg)](https://github.com/XxXKoZXxX/neural-swarm/actions/workflows/deploy.yml)
 [![Pages](https://github.com/XxXKoZXxX/neural-swarm/actions/workflows/pages.yml/badge.svg)](https://github.com/XxXKoZXxX/neural-swarm/actions/workflows/pages.yml)
 
-**Live demo:** [neural-swarm.vercel.app](https://neural-swarm.vercel.app) · **Mirror:** [xxxkozxxx.github.io/neural-swarm](https://xxxkozxxx.github.io/neural-swarm/) · **Get access:** [Gumroad](https://xxxxxkozxxxxx.gumroad.com)
+**Live demo:** [neural-swarm.vercel.app](https://neural-swarm.vercel.app) · **Mirror:** [xxxkozxxx.github.io/neural-swarm](https://xxxkozxxx.github.io/neural-swarm/)
 
 ---
 
-## ⚡ What You Get
+## The studio
 
-- **⚡ One goal, a full pipeline**: An orchestrator picks the agents, runs them in order, and hands back code, tests, and docs from a single prompt.
-- **🛡 Security audit desk**: Point it at a repo or paste code for a three-stage `RESEARCHER → DEBUGGER → REVIEWER` pass with severity ratings and patch diffs.
-- **💰 Cost shown per run**: Token usage and estimated spend are tracked live and attached to every saved run. No markup — you bring your own API key.
-- **🕸 Visual DAG flow builder**: Drag, configure, and execute custom agent execution graphs.
+| View | What it is |
+|---|---|
+| **Studio** | The composer: goal → plan → live agent rail → delivery → Overseer verdict. Chain or parallel execution, temperature, per-agent retry, Prompt Forge personas. |
+| **Preview** | A real sandboxed iframe rendering what the swarm built, with desktop/tablet/mobile widths, a captured console, and spec mode when the output is not HTML. |
+| **Files** | Multi-file workspace: the run's code fences become files (path-aware), editable inline, exportable as a ZIP. |
+| **Terminal** | Live engine log plus an auto-heal console (`/heal`, `/test`, `/explain`, `/review`, or free text) that patches the workspace. |
+| **Canvas** | Visual DAG builder: drag nodes, link ports, cycle-check, save flows, run the topology as a swarm. |
+| **Security** | Three-stage audit (researcher → debugger → reviewer) with CRITICAL/MAJOR/MINOR/NIT findings, a risk summary and a GitHub-issue export. |
+| **Research** | Deep-research briefs: sub-questions, tradeoff tables, confidence notes, saved straight to the vault. |
+| **Vault** | The knowledge base — pin, search, export/import JSON, inject any item back into a goal. |
+| **Marketplace** | Browse, fork and publish goal templates; everything is plain JSON so it travels well. |
+| **History** | Every run, searchable, starred, restorable, branchable, and diffable two-at-a-time word by word. |
+| **Insights** | Tokens, cost, score trend, agent utilisation and a 14-day activity chart. |
+| **Memory** | The taste profile the swarm learns from 👍/👎 — likes, dislikes, hard rules, XP levels — injected into every prompt. |
 
----
+Everything is keyboard-first (`⌘K` command palette, `⌘↵` run, `Esc` to abort, `1–9` to jump views), themed light or dark, and responsive down to a phone.
 
-## The 10 Agents
+## The ten agents
 
-| Icon | Agent | What It Does |
-|------|-------|--------------|
-| ⬡ | **ARCHITECT** | System design, schemas, technical decisions. Production-grade. |
-| ⌨ | **CODER** | Complete, runnable, production-ready code. Always includes a HOW TO RUN section. |
-| 🐛 | **DEBUGGER** | Root-cause analysis, fully fixed output. No hand-waving. |
-| ✓ | **TESTER** | Full test suites — edge cases, mocks, assertions included. |
-| ◈ | **ANALYST** | Scores work /10, identifies weaknesses, gives a prioritized improvement plan. |
-| ↺ | **REFACTORER** | Applies DRY, clean naming, design patterns. Outputs a change log + refactored code. |
-| ◉ | **RESEARCHER** | Deep technical research with comparisons, tradeoffs, and version-specific details. |
-| ✎ | **WRITER** | READMEs, docs, reports, any tone, any audience. |
-| 👁 | **REVIEWER** | Principal-engineer code review: rates every issue CRITICAL / MAJOR / MINOR / NIT. |
-| ◇ | **DESIGNER** | Detailed UI/UX direction: layout, palette, typography, components, UX flows. |
+| | Agent | What it does |
+|---|---|---|
+| ⬡ | **ARCHITECT** | Schemas, service boundaries, data models, build order. |
+| ◉ | **RESEARCHER** | Options, tradeoffs, version-specific detail before code is written. |
+| ⌨ | **CODER** | Complete, runnable code with a HOW TO RUN section. |
+| 🐛 | **DEBUGGER** | Reproduces, isolates and patches real defects. |
+| ✓ | **TESTER** | Edge cases, mocks and assertions in a runnable suite. |
+| 👁 | **REVIEWER** | Review rated CRITICAL / MAJOR / MINOR / NIT. |
+| ↺ | **REFACTORER** | DRY, naming, structure — plus a change log. |
+| ◈ | **ANALYST** | Scores the work /10 with a prioritised plan. |
+| ✎ | **WRITER** | READMEs, docs and reports in the tone you ask for. |
+| ◇ | **DESIGNER** | Layout, palette, type scale, components, UX flows. |
 
----
+Custom agents can be added in Settings — same contract, your icon, colour and system prompt.
 
-## Features
+## What you can take out
 
-### 🛡 GitHub Security Audit & Bug Bounty Desk
-Drop a public or private GitHub repository URL or paste code to execute a 3-stage security inspection pipeline (`RESEARCHER` → `DEBUGGER` → `REVIEWER`).
-- Rates vulnerabilities: `[CRITICAL]`, `[MAJOR]`, `[MINOR]`, `[NIT]`
-- Generates exact root-cause diagnostics & patch diffs
-- 1-click **Export as GitHub Issue** and **Save to Neural Vault**
+- **Markdown dispatch** — every agent's output plus the Overseer verdict in one file.
+- **ZIP of the workspace** — the generated project as files, not a wall of text.
+- **Script export** — the same goal, agent order and system prompts as a runnable Node, Python or cURL script. Your key is read from the environment and never embedded.
+- **GitHub issue** — security findings formatted for triage.
+- **Share / webhook** — hand a run to a gist or your own endpoint.
+- **Full JSON backup** — one click from Settings, plus CSV for run history.
 
-### 🕸 Visual DAG Agent Workflow Builder
-Visually design and connect custom agent topologies.
-- Presets: `SaaS Dev Pipeline`, `Bug Bounty Scan`, `Refactor & Polish`, `UI/UX Spec & Code`
-- Execute custom topologies live in real-time
+## Bring your own key (or don't)
 
-### 🗝 Neural Vault & Knowledge Base
-Store, search, and reuse key architectural decisions, prompt snippets, and code outputs across sessions with 1-click context injection into active Swarm goals.
+Set an Anthropic key (and optionally a Gemini key) in **Settings**. Keys are written to `sessionStorage`, not `localStorage`, unless you explicitly ask to remember them on the device.
 
-### 🎙 Audio Briefings (Text-to-Speech)
-Hands-free voiceovers for Overseer evaluations with corporate noir voice synthesis.
+No key yet? The studio runs an **offline simulation engine** so every view stays explorable. Simulated runs are labelled as such everywhere — on each agent card, in the run header and in the Overseer verdict. Nothing is ever presented as real model output when it is not, and there is no markup on tokens either way.
 
-### 💻 Dispatch Code Exporter
-Export dispatches into copy-pasteable Node.js CLI scripts, Python scripts, or cURL SSE commands.
+Optional Supabase project (Settings) adds sync of runs, templates and auth. A bundled `swarm-proxy` edge function lets the operator run the swarm on a server key with an allowlist; everyone else must supply their own key.
 
-### Prompt Forge
-3,240 possible prompt transformations before any agent sees your goal.
-
-- **18 Personalities** — Stoic Philosopher, Dark Detective, Mad Scientist, Corporate Lawyer, War General, Hacker Anarchist, Buddhist Monk, Wall Street Shark, Cold Bureaucrat, Silicon Valley CEO, Ancient Oracle, Rogue AI, Nihilist Scholar, Ruthless Strategist, Shadow Broker, Alien Anthropologist, Jaded Journalist, Burnt-Out Visionary
-- **12 Tones** — Blunt & Brutal, Cold & Clinical, Poetic & Dense, Conspiratorial, Dry & Sardonic, Hyper-Technical, Cryptic Riddles, Bureaucratic, Raw & Unfiltered, Urgent Manifesto, Minimal & Precise, Noir Monologue
-- **15 Output Constraints** — Max 80 words, No questions allowed, Numbered steps only, One sentence per idea, No adjectives, Begin with a quote, Use an analogy, End with a warning, Include a contradiction, No passive voice, Start mid-thought, Use a code metaphor, Never explain why, Dense single paragraph, Return only the core truth
-
-### Version Control
-Every run is a commit. Every goal is a branch.
-
-- **Branch** — fork any run into a new experiment
-- **Restore** — load any past run back into the editor
-- **Diff** — side-by-side comparison of two runs: see exactly what each agent changed
-
-### Overseer
-After every run, a separate Overseer agent evaluates the full output chain against your original goal:
-
-- Score: X/10
-- What's missing
-- Corrections
-- Concrete next steps
-
-### Template Marketplace
-- 6 built-in templates: **Full App Builder**, **Bug Eliminator**, **Code Review Pro**, **Research Brief**, **SaaS Marketing Kit**, **Design System**
-- Save your own workflows as templates
-- Fork templates from the community
-- Publish premium templates at any price — checkout via Stripe
-
-### Context Compression
-When a swarm runs 3+ agents, prior outputs are automatically compressed using Claude. Key technical decisions, code, and facts are preserved across the full chain.
-
-### Real-time Cost Tracking
-Every token counted. Cost displayed live per run at $0.000003/token. Saved to the run record alongside score and agent outputs.
-
-### Auth + Persistence
-- Sign up / sign in via Supabase Auth
-- All runs auto-saved with history, cost, score, branch, and version number
-- Last 40 runs loaded per session
-
-### Pricing Tiers
-
-| Tier | Price | Runs | Agents | History | Templates |
-|------|-------|------|--------|---------|-----------|
-| **FREE** | $0 | 5/month | 3/run | Basic | Community |
-| **PRO** | $29/mo | Unlimited | All 10 | Full + versioning | Save & share |
-| **POWER** | $79/mo | Unlimited | All 10 | Full + analytics | Team workspace + API |
-
-Upgrades via Stripe. Template purchases handled inline.
-
-### BYOK + Proxy
-- Bring your own Anthropic API key — direct browser call, no middleman
-- Or route through a Supabase Edge Function proxy (included)
-
-### Self-Healing CI/CD — `sentinel.js`
-Sentinel monitors GitHub Actions for failures, extracts logs from failed jobs, dispatches the DEBUGGER agent (Dark Detective personality), and files a GitHub Issue with the full root-cause diagnosis and fix.
+## Quick start
 
 ```bash
-npm run sentinel        # live: detects failures, creates GitHub issue
-npm run sentinel:dry    # dry-run: diagnosis only, no side effects
-```
-
-Requires `GITHUB_TOKEN` (repo + actions:read) and `ANTHROPIC_API_KEY` in `.env`.
-
----
-
-## Quick Start
-
-```bash
-git clone https://github.com/XxXKoZXxX/neural-swarm
-cd neural-swarm
 npm install
-npm run dev
+npm run dev          # http://localhost:5173
+npm run test:all     # lint + unit + render + click-through
+npm run build        # production bundle in dist/
 ```
 
-Open `http://localhost:5173`, enter your Anthropic API key in ⚙ Settings, type a goal, hit **LAUNCH THE SWARM**.
+Node 22+.
 
-## Deploy in 30 Seconds
+### Scripts
 
-```bash
-npx vercel --prod
+| Script | What it runs |
+|---|---|
+| `npm run dev` / `build` / `preview` | Vite dev server, production build, local preview of `dist/`. |
+| `npm run lint` | ESLint 9 over the whole tree. |
+| `npm test` | 31 unit tests for the pure logic (no dependencies — `node:test`). |
+| `npm run test:render` | Server-renders all 19 top-level views and asserts their markup. |
+| `npm run test:dom` | Mounts the real app in jsdom and drives it: land → studio → every nav item → settings → ⌘K → theme → a full offline run → history → files → preview → script export. |
+| `npm run test:all` | Everything above, in that order. |
+| `npm run sentinel` | CI-failure triage helper (`--dry-run` to preview without filing an issue). |
+
+The click-through test exists because a green build cannot see a component that is referenced but never defined. That is exactly the class of bug this codebase shipped with before the makeover.
+
+## Architecture
+
+```
+src/
+  App.jsx                 state, routing between views, the run lifecycle
+  main.jsx                entry, error boundary, legacy-data migration
+  index.css               design system: tokens, utilities, components, themes
+  lib/
+    constants.js          agents, models, plans, templates, storage keys
+    api.js                streaming model layer, orchestrator, parsers, diff, simulation
+    store.js              storage, Supabase REST, downloads, ZIP, migration
+    scripts.js            run → Node / Python / cURL exporters
+  hooks/
+    useSwarm.js           plan → agents → overseer, abort, retry
+    useWorkspace.js       code fences → files (never clobbers your edits)
+    usePersistedState.js  localStorage/sessionStorage state
+    useToast.js           toast context
+  components/             ui.jsx, icons.jsx, Markdown.jsx + one file per view
+tests/
+  logic.test.js           unit tests
+  smoke-entry.jsx         server-render smoke test
+  dom-entry.jsx           jsdom click-through
 ```
 
-Static Vite build — deploys anywhere. Zero backend required for core features.
+Zero UI dependencies: the icons, markdown renderer, syntax highlighter, charts, modal/drawer system and ZIP writer are all in this repo (React, React DOM and `@vercel/speed-insights` are the only runtime imports).
 
-## Supabase Setup (optional — enables persistence, auth, marketplace)
+## Privacy
 
-1. Create a Supabase project
-2. Run this schema:
+No backend by default. Runs, files, flows, vault items, memory and history live in your browser's `localStorage`; secrets live in `sessionStorage`; "Export all data" in Settings gives you a JSON copy and "Reset local data" removes it. Upgrading from the pre-makeover build migrates the old `ns_*` keys automatically, once.
 
-```sql
-create table agent_runs (
-  id uuid default gen_random_uuid() primary key,
-  goal text,
-  branch text default 'main',
-  version_num int,
-  run_message text,
-  agents jsonb,
-  overseer text,
-  score text,
-  tokens_used int,
-  cost text,
-  user_email text,
-  is_template boolean default false,
-  created_at timestamptz default now()
-);
+## Deployment
 
-create table templates (
-  id uuid default gen_random_uuid() primary key,
-  name text,
-  description text,
-  goal_template text,
-  agent_flow jsonb,
-  tags text[],
-  category text,
-  price numeric default 0,
-  is_public boolean default true,
-  usage_count int default 0,
-  creator_email text,
-  created_at timestamptz default now()
-);
-```
-
-3. Paste your Supabase URL and anon key into ⚙ Settings in the app
-
-## Tech Stack
-
-| Layer | Tech |
-|-------|------|
-| Frontend | React 19 + Vite 8 |
-| AI | Anthropic Claude Sonnet 4 — streaming SSE |
-| Auth + DB | Supabase (optional) |
-| Payments | Stripe (optional) |
-| CI Sentinel | Octokit + Anthropic SDK (Node.js) |
-| Deploy | Vercel |
-
-Zero UI library dependencies. Zero backend required for core use.
-
----
-
-## Roadmap
-
-- [ ] Bug Bounty landing page — drop a GitHub URL, Debugger fixes it free once
-- [ ] X / Build-in-Public bot
-- [ ] Agent-to-agent memory across runs
-- [ ] MCP server — use Neural Swarm agents from Claude Code
-
----
+`main` deploys through `.github/workflows/deploy.yml`: lint → unit tests → render smoke → build → Vercel (staging, then production). `pages.yml` publishes the same build to GitHub Pages with `GITHUB_PAGES=true` so Vite emits the right base path. Required repository secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_NEURAL_SWARM`.
 
 ## License
 
-MIT — use it, fork it, sell it.
+Private project. Bring your own API key; tokens are billed by your provider, never marked up here.

@@ -7,7 +7,7 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   // Build output, scratch space, and the vendored Discord sample app are not
   // ours to lint - the sample ships with its own unused helpers and globals.
-  globalIgnores(['dist', 'scratch', 'discord-example-app']),
+  globalIgnores(['dist', 'scratch', 'discord-example-app', '.smoke']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [

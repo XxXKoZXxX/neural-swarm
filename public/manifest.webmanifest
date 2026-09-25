@@ -1,0 +1,13 @@
+{
+  "name": "Neural Swarm — AI agent orchestration studio",
+  "short_name": "Neural Swarm",
+  "description": "Give it a goal and a swarm of specialised AI agents plans, builds, tests, audits and reviews it.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#07090c",
+  "theme_color": "#07090c",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
