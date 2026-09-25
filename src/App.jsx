@@ -549,6 +549,16 @@ const WHO=[
   {i:"🏢",t:"Startups",d:"Your first AI employees. Ready on day one."},
   {i:"⚡",t:"Agencies",d:"Deliver client work faster, at higher margin."},
 ];
+function formatTastePrompt(tp) {
+  if (!tp || !tp.enabled) return "";
+  const likesStr = (tp.likes || []).join("; ");
+  const dislikesStr = (tp.dislikes || []).join("; ");
+  const rulesStr = (tp.rules || []).join("; ");
+  return `\n\n[NEURAL TASTE SIGNATURE - ADAPTATION LEVEL ${tp.level || 1}]:\n` +
+    (likesStr ? `- PREFERRED CODING PATTERNS: ${likesStr}\n` : "") +
+    (dislikesStr ? `- STRICTLY AVOID / DISLIKED PATTERNS: ${dislikesStr}\n` : "") +
+    (rulesStr ? `- USER DIRECTIVES: ${rulesStr}\n` : "");
+}
 function Landing({onStart,onStartWithGoal,onSignIn,onUpgrade}) {
   const [tick,setTick]=useState(0);
   useEffect(()=>{const id=setInterval(()=>setTick(t=>(t+1)%(DEMO_LINES.length+3)),750);return()=>clearInterval(id);},[]);
