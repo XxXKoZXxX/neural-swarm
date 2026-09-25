@@ -1553,9 +1553,9 @@ export default function App() {
             <span style={{width:"10px",height:"10px",background:T.green,borderRadius:"50%",boxShadow:`0 0 10px ${T.green}`}}></span>
             <span style={{color:"#f1f5f9",fontSize:"13px",fontWeight:"700",letterSpacing:"1px"}}>NEURAL<span style={{color:T.green}}>SWARM</span></span>
           </div>
-          <span style={{color:T.dim,fontSize:"11px"}}>10 AI Specialists Active</span>
+          {advancedMode&&<span style={{color:T.dim,fontSize:"11px"}}>10 AI Specialists Active</span>}
           <div style={{display:"flex",gap:"4px",marginLeft:"8px",flexWrap:"wrap",alignItems:"center"}}>
-            {[
+            {(advancedMode ? [
               ["swarm","⬡ Swarm"],
               ["sandbox","▶ Preview"],
               ["terminal","⚡ Terminal"],
@@ -1568,7 +1568,11 @@ export default function App() {
               ["templates","🛒 Market"],
               ["history","◈ History"],
               ["dashboard","◉ Dash"]
-            ].map(([t,l])=>(
+            ] : [
+              ["swarm","⚡ Build"],
+              ["sandbox","📋 Results"],
+              ["templates","🛒 Examples"]
+            ]).map(([t,l])=>(
               <button key={t} onClick={()=>setTab(t)} style={{
                 background: t===tab ? "rgba(16,185,129,0.18)" : "transparent",
                 border: t===tab ? "1px solid rgba(16,185,129,0.4)" : "1px solid transparent",
@@ -1587,7 +1591,7 @@ export default function App() {
         <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
           {/* SIMPLE vs ADVANCED MODE TOGGLE */}
           <div style={{display:"flex",border:"1px solid rgba(16,185,129,0.25)",background:"#121916",borderRadius:"20px",padding:"2px"}}>
-            <button onClick={()=>{setAdvancedMode(false);localStorage.setItem("ns_advanced_mode","false");}} style={{
+            <button onClick={()=>{setAdvancedMode(false);localStorage.setItem("ns_advanced_mode","false");if(!["swarm","sandbox","templates"].includes(tab))setTab("swarm");}} style={{
               background:!advancedMode?T.green:"transparent",
               color:!advancedMode?"#0b0f0d":"#94a3b8",
               border:"none",
@@ -1610,15 +1614,20 @@ export default function App() {
               transition:"all .2s ease"
             }}>⚙ Advanced</button>
           </div>
-          <div style={{border:"1px solid rgba(16,185,129,0.25)",color:T.green,padding:"4px 10px",borderRadius:"6px",fontSize:"11px",background:"rgba(16,185,129,0.08)",fontWeight:"500"}}>
-            Level {tasteProfile.level || 1} • {tasteProfile.xp || 0} XP
-          </div>
+          {advancedMode&&(
+            <div style={{border:"1px solid rgba(16,185,129,0.25)",color:T.green,padding:"4px 10px",borderRadius:"6px",fontSize:"11px",background:"rgba(16,185,129,0.08)",fontWeight:"500"}}>
+              Level {tasteProfile.level || 1} • {tasteProfile.xp || 0} XP
+            </div>
+          )}
           {isGated&&<button style={{...Btn(T.purple),padding:"3px 10px",fontSize:"10px"}} onClick={()=>setShowUpg(true)}>↑ Upgrade</button>}
           <div style={{display:"flex",alignItems:"center",gap:"5px",padding:"4px 8px",borderRadius:"6px",background:"#121916",border:"1px solid rgba(255,255,255,0.06)"}}>
             <span style={{...Dot(phase),marginRight:0}}/>
             <span style={{color:phaseColor[phase],fontSize:"10.5px",fontWeight:"600",textTransform:"uppercase"}}>{phase}</span>
           </div>
           {session?<span style={{color:T.dim,fontSize:"11px"}}>{session.email?.slice(0,16)}</span>:<button style={{...Btn(T.dim),padding:"4px 10px",fontSize:"11px"}} onClick={()=>setShowAuth(true)}>Sign In</button>}
+          {!advancedMode&&!apiKey&&(
+            <button onClick={()=>setSettings(true)} style={{...Btn(T.orange),padding:"4px 12px",fontSize:"11px",fontWeight:"700",animation:"pulse 2s infinite"}}>🔑 Setup</button>
+          )}
           <button onClick={()=>setSettings(p=>!p)} style={{background:"#121916",border:`1px solid ${settings?T.green:T.border2}`,borderRadius:"6px",color:settings?T.green:T.muted,padding:"4px 9px",fontSize:"12px",cursor:"pointer"}}>⚙</button>
         </div>
       </div>
@@ -1626,26 +1635,42 @@ export default function App() {
       {/* SETTINGS */}
       {settings&&(
         <div style={{background:T.bg2,borderBottom:`1px solid ${T.border}`,padding:"14px 18px",display:"flex",gap:"12px",flexWrap:"wrap",alignItems:"flex-end"}}>
-          {[["Anthropic Key",apiKey,setApiKey,showKey,setShowKey,"sk-ant-..."],["Gemini Key",geminiKey,setGeminiKey,showGeminiKey,setShowGeminiKey,"AIza..."],["Proxy URL",proxyUrl,setProxyUrl,false,null,"https://xyz.supabase.co/functions/v1/swarm-proxy"],["Supabase URL",sbUrl,setSbUrl,false,null,"https://xyz.supabase.co"],["Supabase Key",sbKey,setSbKey,showSbKey,setShowSbKey,"eyJ..."],["Webhook URL",webhookUrl,setWebhookUrl,false,null,"https://hooks.example.com/swarm"]].map(([label,val,setter,show,setShow,ph])=>(
-            <div key={label} style={{flex:"0 0 195px"}}>
-              <div style={lbl}>{label}</div>
-              <div style={{position:"relative"}}>
-                <input style={{...bi,paddingRight:setShow?"44px":"10px"}} type={show?"text":"password"} value={val} onChange={e=>setter(e.target.value)} placeholder={ph}/>
-                {setShow&&<button onClick={()=>setShow(p=>!p)} style={{position:"absolute",right:"6px",top:"7px",background:"none",border:"none",color:T.muted,fontSize:"10px",cursor:"pointer",fontFamily:"inherit"}}>{show?"HIDE":"SHOW"}</button>}
+          {!advancedMode ? (
+            <>
+              <div style={{flex:"0 0 280px"}}>
+                <div style={{color:T.green,fontSize:"12px",fontWeight:"700",marginBottom:"4px"}}>🔑 Anthropic API Key</div>
+                <div style={{color:T.muted,fontSize:"11px",marginBottom:"8px"}}>Get yours free at console.anthropic.com — paste it here to start building.</div>
+                <div style={{position:"relative"}}>
+                  <input style={{...bi,paddingRight:"44px"}} type={showKey?"text":"password"} value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="sk-ant-..."/>
+                  <button onClick={()=>setShowKey(p=>!p)} style={{position:"absolute",right:"6px",top:"7px",background:"none",border:"none",color:T.muted,fontSize:"10px",cursor:"pointer",fontFamily:"inherit"}}>{showKey?"HIDE":"SHOW"}</button>
+                </div>
               </div>
-            </div>
-          ))}
-          <div style={{flex:"0 0 140px"}}>
-            <div style={lbl}>Model</div>
-            <select style={{...bi,padding:"5px 8px",fontSize:"11px"}} value={model} onChange={e=>setModel(e.target.value)}>
-              {MODELS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
-          </div>
-          <div style={{flex:"0 0 130px"}}>
-            <div style={lbl}>Max Tokens (0=auto)</div>
-            <input style={{...bi,padding:"5px 8px",fontSize:"11px"}} type="number" value={customMaxTok} onChange={e=>setCustomMaxTok(parseInt(e.target.value)||0)} min="0" max="8000" step="100"/>
-          </div>
-          <button style={{...Btn(T.dim),padding:"6px 12px",fontSize:"10px"}} onClick={()=>setSettings(false)}>DONE</button>
+              <button style={{...Btn(T.green),padding:"7px 16px",fontSize:"11px"}} onClick={()=>setSettings(false)}>✓ Save & Close</button>
+            </>
+          ) : (
+            <>
+              {[["Anthropic Key",apiKey,setApiKey,showKey,setShowKey,"sk-ant-..."],["Gemini Key",geminiKey,setGeminiKey,showGeminiKey,setShowGeminiKey,"AIza..."],["Proxy URL",proxyUrl,setProxyUrl,false,null,"https://xyz.supabase.co/functions/v1/swarm-proxy"],["Supabase URL",sbUrl,setSbUrl,false,null,"https://xyz.supabase.co"],["Supabase Key",sbKey,setSbKey,showSbKey,setShowSbKey,"eyJ..."],["Webhook URL",webhookUrl,setWebhookUrl,false,null,"https://hooks.example.com/swarm"]].map(([label,val,setter,show,setShow,ph])=>(
+                <div key={label} style={{flex:"0 0 195px"}}>
+                  <div style={lbl}>{label}</div>
+                  <div style={{position:"relative"}}>
+                    <input style={{...bi,paddingRight:setShow?"44px":"10px"}} type={show?"text":"password"} value={val} onChange={e=>setter(e.target.value)} placeholder={ph}/>
+                    {setShow&&<button onClick={()=>setShow(p=>!p)} style={{position:"absolute",right:"6px",top:"7px",background:"none",border:"none",color:T.muted,fontSize:"10px",cursor:"pointer",fontFamily:"inherit"}}>{show?"HIDE":"SHOW"}</button>}
+                  </div>
+                </div>
+              ))}
+              <div style={{flex:"0 0 140px"}}>
+                <div style={lbl}>Model</div>
+                <select style={{...bi,padding:"5px 8px",fontSize:"11px"}} value={model} onChange={e=>setModel(e.target.value)}>
+                  {MODELS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
+                </select>
+              </div>
+              <div style={{flex:"0 0 130px"}}>
+                <div style={lbl}>Max Tokens (0=auto)</div>
+                <input style={{...bi,padding:"5px 8px",fontSize:"11px"}} type="number" value={customMaxTok} onChange={e=>setCustomMaxTok(parseInt(e.target.value)||0)} min="0" max="8000" step="100"/>
+              </div>
+              <button style={{...Btn(T.dim),padding:"6px 12px",fontSize:"10px"}} onClick={()=>setSettings(false)}>DONE</button>
+            </>
+          )}
         </div>
       )}
 
@@ -1733,7 +1758,7 @@ export default function App() {
                   </>
                 )}
                 {running&&<button style={Btn(T.orange)} onClick={()=>{abortRef.current=true;setRunning(false);setPhase("idle");}}>Abort</button>}
-                {phase==="done"&&<button style={Btn(T.dim)} onClick={()=>{setAgOut({});setOverseer("");setLogs([]);setPhase("idle");setSbStatus("");setRunCost(0);setRunProgress(0);}}>Start New App</button>}
+                {phase==="done"&&<button style={Btn(T.dim)} onClick={()=>{setAgOut({});setOverseer("");setLogs([]);setPhase("idle");setSbStatus("");setRunCost(0);setRunProgress(0);}}>🔄 {advancedMode?"Start New App":"Build Something Else"}</button>}
                 {phase==="done"&&<button style={{...Btn(T.cyan),padding:"9px 14px",fontSize:"12px"}} onClick={copyAll} title="Copy all outputs">📋 Copy Code</button>}
                 {phase==="done"&&<button style={{...Btn(T.green),padding:"9px 14px",fontSize:"12px"}} onClick={()=>setTab("sandbox")}>▶ Open Preview</button>}
                 {advancedMode&&phase==="done"&&(
@@ -1806,12 +1831,34 @@ export default function App() {
             </div>
             <div>
               {Object.keys(agOut).length===0&&phase==="idle"&&(
-                <div style={{border:`1px dashed ${T.border2}`,padding:"48px",textAlign:"center"}}>
-                  <div style={{fontSize:"36px",opacity:.1,marginBottom:"10px"}}>⬡</div>
-                  <div style={{color:T.muted,letterSpacing:"3px",fontSize:"11px"}}>SWARM DORMANT</div>
-                  <div style={{color:T.dim,fontSize:"11px",marginTop:"6px"}}>Enter a goal → ▶ Dispatch</div>
-                  {sbUrl&&sbKey&&<div style={{color:"#3ecf8e",fontSize:"10px",marginTop:"8px"}}>⚡ Supabase connected</div>}
-                </div>
+                advancedMode ? (
+                  <div style={{border:`1px dashed ${T.border2}`,padding:"48px",textAlign:"center"}}>
+                    <div style={{fontSize:"36px",opacity:.1,marginBottom:"10px"}}>⬡</div>
+                    <div style={{color:T.muted,letterSpacing:"3px",fontSize:"11px"}}>SWARM DORMANT</div>
+                    <div style={{color:T.dim,fontSize:"11px",marginTop:"6px"}}>Enter a goal → ▶ Dispatch</div>
+                    {sbUrl&&sbKey&&<div style={{color:"#3ecf8e",fontSize:"10px",marginTop:"8px"}}>⚡ Supabase connected</div>}
+                  </div>
+                ) : (
+                  <div style={{border:"1px dashed rgba(16,185,129,0.2)",borderRadius:"12px",padding:"40px 32px",textAlign:"center",background:"#0a0f0c"}}>
+                    {!apiKey ? (
+                      <>
+                        <div style={{fontSize:"32px",marginBottom:"12px"}}>🔑</div>
+                        <div style={{color:"#f1f5f9",fontSize:"15px",fontWeight:"700",marginBottom:"8px"}}>One quick setup step</div>
+                        <div style={{color:"#94a3b8",fontSize:"12px",lineHeight:1.6,marginBottom:"16px",maxWidth:"260px",margin:"0 auto 16px"}}>You need a free Anthropic API key to power the AI. It only takes 2 minutes to get one.</div>
+                        <div style={{display:"flex",gap:"8px",justifyContent:"center",flexWrap:"wrap"}}>
+                          <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" style={{...Btn(T.cyan),padding:"9px 18px",fontSize:"12px",textDecoration:"none",display:"inline-block"}}>Get Free API Key →</a>
+                          <button style={{...Btn(T.green),padding:"9px 18px",fontSize:"12px"}} onClick={()=>setSettings(true)}>Paste My Key</button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{fontSize:"32px",marginBottom:"12px"}}>✨</div>
+                        <div style={{color:"#f1f5f9",fontSize:"15px",fontWeight:"700",marginBottom:"8px"}}>Ready to build anything</div>
+                        <div style={{color:"#94a3b8",fontSize:"12px",lineHeight:1.6}}>Type what you want to create above, then click Build. 10 AI specialists will design, code, and review your project automatically.</div>
+                      </>
+                    )}
+                  </div>
+                )
               )}
               {Object.keys(agOut).map(name=><AgentCard key={name} name={name} out={agOut[name]} onRetry={retryAgent} agDef={effectiveAgents[name]} onFeedback={handleFeedback}/>)}
               {(overseer||phase==="overseeing")&&(
@@ -1831,7 +1878,7 @@ export default function App() {
               {phase==="done"&&(
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:"10px"}}>
                   <div style={{color:T.green,fontSize:"11px",letterSpacing:"2px"}}>✓ COMPLETE {sbStatus==="saved"?"· SAVED ✓":sbStatus==="saving"?"· SAVING...":sbStatus==="error"?"· ERR":sbStatus==="nosupa"?"· (no db)":""}</div>
-                  <div style={{color:T.yellow,fontSize:"11px"}}>⚡ ${runCost.toFixed(5)}</div>
+                  {advancedMode&&<div style={{color:T.yellow,fontSize:"11px"}}>⚡ ${runCost.toFixed(5)}</div>}
                 </div>
               )}
             </div>
@@ -2014,7 +2061,7 @@ export default function App() {
       {exportOpen&&<ExportModal goal={goal} agents={agOut} model={model} onClose={()=>setExportOpen(false)}/>}
       {showUpg&&<UpgradeModal used={runCount} sbUrl={sbUrl} jwt={jwt} onClose={()=>setShowUpg(false)} onPro={()=>{loadPlan();setShowUpg(false);}}/>}
       {showAuth&&<AuthModal sbUrl={sbUrl} sbKey={sbKey} onSession={s=>{setSession(s);setShowAuth(false);}} onSkip={()=>setShowAuth(false)}/>}
-      <style>{`select option{background:#0d111a}::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:#090b10}::-webkit-scrollbar-thumb{background:#1e2840}input::placeholder,textarea::placeholder{color:#334}`}</style>
+      <style>{`select option{background:#0d111a}::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:#090b10}::-webkit-scrollbar-thumb{background:#1e2840}input::placeholder,textarea::placeholder{color:#334}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}`}</style>
     </div>
     </>
   );
