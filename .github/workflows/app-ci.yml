@@ -50,11 +50,15 @@ jobs:
 
       # No mobile/node_modules here on purpose: this is exactly how Vercel
       # builds, so the check below covers the real production path.
+      # APP_STRICT makes a missing app a hard failure in CI only.
       - name: Build site and app (as production does)
-        run: node scripts/build-all.mjs
+        run: |
+          set -o pipefail
+          APP_STRICT=1 node scripts/build-all.mjs 2>&1 | tee /tmp/build.log
 
       - name: App must be present and installable
         run: |
+          set -o pipefail
           node -e "
           const fs = require('fs');
           const p = (f) => fs.existsSync('dist/app/' + f);
@@ -80,9 +84,39 @@ jobs:
             console.log((pass ? '  ok   ' : '  FAIL ') + label);
             if (!pass) bad++;
           }
-          if (bad) { console.error('\nApp is not installable at /app/.'); process.exit(1); }
-          console.log('\n/ app is installable at /app/ and the site is intact.');
-          "
+          if (bad) { console.error('App is not installable at /app/.'); process.exit(1); }
+          console.log('App is installable at /app/ and the site is intact.');
+          " 2>&1 | tee /tmp/appcheck.log
+
+      # GitHub's log download endpoint has been returning EOF, so on failure the
+      # useful output is reposted as a PR comment where it can actually be read.
+      - name: Post build diagnostics
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "App CI failed on \`${{ github.sha }}\`."
+            echo
+            echo "**build-all.mjs output**"
+            echo '```'
+            tail -30 /tmp/build.log 2>/dev/null || echo "(no build log)"
+            echo '```'
+            echo "**installability check**"
+            echo '```'
+            cat /tmp/appcheck.log 2>/dev/null || echo "(check never ran)"
+            echo '```'
+            echo "**dist/ tree**"
+            echo '```'
+            find dist -maxdepth 2 2>/dev/null | head -40 || echo "(no dist)"
+            echo '```'
+            echo "**mobile/dist tree**"
+            echo '```'
+            find mobile/dist -maxdepth 2 2>/dev/null | head -20 || echo "(no mobile/dist)"
+            echo '```'
+          } > /tmp/diag.md
+          pr=$(gh pr list --head "${{ github.ref_name }}" --json number -q '.[0].number' 2>/dev/null || true)
+          if [ -n "$pr" ]; then gh pr comment "$pr" --body-file /tmp/diag.md; else cat /tmp/diag.md; fi
 
       # Local base path sanity: the same source must also build for a domain root.
       - name: App still builds for a root deployment

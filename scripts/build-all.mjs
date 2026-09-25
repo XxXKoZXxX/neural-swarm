@@ -94,5 +94,12 @@ if (appBuilt) {
 
 if (!appBuilt) {
   console.warn('\n*** The app was NOT included in this deployment. The site is unaffected. ***')
-  console.warn('*** Check the "Deploy app" workflow for the failure. ***')
+  console.warn('*** Check the "App CI" workflow for the failure. ***')
+  // Vercel must never fail because the app broke — a down website is worse than
+  // a missing app tab. CI sets APP_STRICT so the same build does fail there,
+  // which is what actually blocks a broken app from reaching production.
+  if (process.env.APP_STRICT) {
+    console.error('\nAPP_STRICT is set: failing because the app is not in the output.')
+    process.exit(1)
+  }
 }
