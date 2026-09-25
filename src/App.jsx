@@ -850,6 +850,33 @@ function DocsModal({ onClose, onStart }) {
           </div>
         </section>
         <section>
+          <div className="section-label">Install it on your phone</div>
+          <p className="tiny muted mt-8">
+            Neural Swarm is a web app that installs like a native one: full screen, its own icon, opens to the studio, and the shell still loads without a signal. The
+            install option lives in the phone menu — tap <strong>More</strong> in the bottom bar, then <strong>Install as an app</strong>.
+          </p>
+          <div className="col gap-8 mt-10">
+            <div className="row gap-10">
+              <span className="small strong" style={{ width: 116, flex: "none" }}>
+                iPhone
+              </span>
+              <span className="tiny muted">Safari → Share → Add to Home Screen. (Chrome and Firefox on iOS cannot install web apps — use Safari.)</span>
+            </div>
+            <div className="row gap-10">
+              <span className="small strong" style={{ width: 116, flex: "none" }}>
+                Android
+              </span>
+              <span className="tiny muted">Chrome → ⋮ menu → Install app. Or use the Install row in the More sheet.</span>
+            </div>
+            <div className="row gap-10">
+              <span className="small strong" style={{ width: 116, flex: "none" }}>
+                Desktop
+              </span>
+              <span className="tiny muted">Chrome or Edge show an install icon in the address bar.</span>
+            </div>
+          </div>
+        </section>
+        <section>
           <div className="section-label">Guides</div>
           <div className="row gap-16 mt-8">
             <a href="./ai-agent-orchestration-tool.html">AI agent orchestration guide</a>

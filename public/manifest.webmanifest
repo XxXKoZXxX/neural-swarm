@@ -2,9 +2,9 @@
   "name": "Neural Swarm — AI agent orchestration studio",
   "short_name": "Neural Swarm",
   "description": "Give it a goal and a swarm of specialised AI agents plans, builds, tests, audits and reviews it — with live preview, files and history on any device.",
-  "id": "/",
-  "start_url": "/#/swarm",
-  "scope": "/",
+  "id": "./",
+  "start_url": "./#/swarm",
+  "scope": "./",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "orientation": "any",
@@ -12,14 +12,14 @@
   "theme_color": "#07090c",
   "categories": ["developer", "productivity", "utilities"],
   "icons": [
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "New run", "short_name": "Run", "url": "/#/swarm", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Files", "short_name": "Files", "url": "/#/files", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
-    { "name": "History", "short_name": "History", "url": "/#/history", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+    { "name": "New run", "short_name": "Run", "url": "./#/swarm", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Files", "short_name": "Files", "url": "./#/files", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "History", "short_name": "History", "url": "./#/history", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] }
   ]
 }

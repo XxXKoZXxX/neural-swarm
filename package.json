@@ -11,7 +11,8 @@
     "test:render": "vite build --ssr tests/smoke-entry.jsx --outDir .smoke --logLevel error && node .smoke/smoke-entry.js",
     "test:dom": "vite build --ssr tests/dom-entry.jsx --outDir .smoke --logLevel error && node .smoke/dom-entry.js",
     "test:mobile": "vite build --ssr tests/mobile-entry.jsx --outDir .smoke --logLevel error && node .smoke/mobile-entry.js",
-    "test:all": "npm run lint && npm test && npm run test:render && npm run test:dom && npm run test:mobile",
+    "audit:pwa": "node scripts/audit-pwa.mjs",
+    "test:all": "npm run lint && npm test && npm run test:render && npm run test:dom && npm run test:mobile && npm run build && npm run audit:pwa",
     "preview": "vite preview",
     "sentinel": "node sentinel.js",
     "sentinel:dry": "node sentinel.js --dry-run"

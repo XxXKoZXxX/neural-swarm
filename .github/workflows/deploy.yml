@@ -41,6 +41,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: PWA install audit
+        run: npm run audit:pwa
+
   deploy-staging:
     name: Deploy → Staging
     needs: ci

@@ -16,7 +16,10 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(CACHE)
-      .then((cache) => cache.addAll(SHELL))
+      .then((cache) =>
+        // Individually, not addAll: one missing file must not empty the shell.
+        Promise.all(SHELL.map((url) => cache.add(url).catch(() => undefined))),
+      )
       .catch(() => undefined)
       .then(() => self.skipWaiting()),
   );

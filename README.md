@@ -95,7 +95,8 @@ Node 22+.
 | `npm run test:render` | Server-renders all 19 top-level views and asserts their markup. |
 | `npm run test:dom` | Mounts the real app in jsdom and drives it: land → studio → every nav item → settings → ⌘K → theme → a full offline run → history → files → preview → script export. |
 | `npm run test:mobile` | Same app at 390 × 844: tab bar, all-views sheet, swipe, deep links, browser back, the phone file picker and settings. |
-| `npm run test:all` | Everything above, in that order. |
+| `npm run audit:pwa` | Audits the built `dist/` against the browser's install criteria (37 checks) — run after `npm run build`. |
+| `npm run test:all` | Everything above, in that order, ending with a build and the install audit. |
 | `npm run sentinel` | CI-failure triage helper (`--dry-run` to preview without filing an issue). |
 
 The click-through test exists because a green build cannot see a component that is referenced but never defined. That is exactly the class of bug this codebase shipped with before the makeover.
@@ -133,9 +134,25 @@ tests/
 
 Zero UI dependencies: the icons, markdown renderer, syntax highlighter, charts, modal/drawer system and ZIP writer are all in this repo (React, React DOM and `@vercel/speed-insights` are the only runtime imports).
 
-## Install it
+## Install it on your phone
 
-The production build registers a service worker and ships a web app manifest, so the studio installs to a home screen and opens full-screen with no browser chrome. Navigations are network-first (a deploy is never masked by a stale cache), assets are stale-while-revalidate, and model calls are never cached. Chromium browsers get an **Install as an app** button in the phone sheet; on iOS it explains the Share → Add to Home Screen route.
+Neural Swarm installs like a native app: its own icon, full screen, opens straight to the studio, and the shell still loads with no signal.
+
+| Platform | How |
+|---|---|
+| **iPhone / iPad** | Open the site in **Safari** → **Share** → **Add to Home Screen**. (Chrome and Firefox on iOS cannot install web apps — Safari is the only route.) |
+| **Android** | Open in **Chrome** → tap **Install as an app** in the app's *More* sheet (bottom bar → More), or **⋮ → Install app** / **Add to Home screen**. |
+| **Desktop** | Chrome or Edge show an install icon at the right of the address bar. |
+
+You must open the URL **directly in the phone browser** — installed web apps cannot be triggered from inside an embedded preview frame. Installation needs HTTPS, which both the Vercel deployment and the GitHub Pages mirror provide.
+
+What makes it installable, and what `npm run audit:pwa` checks on every build:
+
+- A web app manifest with a name, `start_url`, `scope`, `display: standalone`, theme/background colours, a 192px icon, a 512px icon and a maskable icon — all with URLs that are **path-agnostic**, so the same file works at the Vercel root and under the GitHub Pages `/neural-swarm/` subpath.
+- A service worker with a fetch handler: navigations are **network-first** (a deploy is never masked by a stale cache), assets are stale-while-revalidate, and anything cross-origin — model APIs, Supabase, analytics — is never cached.
+- iOS metadata (`apple-touch-icon`, `apple-mobile-web-app-capable`, a status-bar style and a home-screen title) plus `viewport-fit=cover` so nothing hides under the notch.
+
+**Updating an installed app:** reload it and the new service worker takes over (it calls `skipWaiting` and claims clients), so there is no "stuck on an old version" state.
 
 ## Privacy
 
