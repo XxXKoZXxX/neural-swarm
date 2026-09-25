@@ -1,10 +1,10 @@
 {
-  "id": "/neural-swarm-app",
+  "id": "neural-swarm-app",
   "name": "Neural Swarm",
   "short_name": "Swarm",
   "description": "Any model, any time. Ten specialized agents, Prompt Forge, Vault, Flow builder and Overseer — on your phone.",
-  "start_url": "/?app=1",
-  "scope": "/",
+  "start_url": "./?app=1",
+  "scope": "./",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "orientation": "any",
@@ -12,18 +12,18 @@
   "theme_color": "#0a0708",
   "categories": ["productivity", "developer", "utilities"],
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ],
   "shortcuts": [
-    { "name": "New Chat", "short_name": "Chat", "url": "/?go=chat", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Launch Swarm", "short_name": "Swarm", "url": "/?go=swarm", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Vault", "short_name": "Vault", "url": "/?go=vault", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+    { "name": "New Chat", "short_name": "Chat", "url": "./?go=chat" },
+    { "name": "Launch Swarm", "short_name": "Swarm", "url": "./?go=swarm" },
+    { "name": "Vault", "short_name": "Vault", "url": "./?go=vault" }
   ],
   "share_target": {
-    "action": "/",
+    "action": "./",
     "method": "GET",
     "enctype": "application/x-www-form-urlencoded",
     "params": { "title": "title", "text": "text", "url": "url" }

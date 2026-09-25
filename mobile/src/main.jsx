@@ -11,10 +11,12 @@ createRoot(document.getElementById('root')).render(
 )
 
 // Installable app: register the shell worker in production only, so the dev
-// server never serves a stale build while editing.
+// server never serves a stale build while editing. Resolved against the Vite
+// base so the app installs correctly from a subpath as well as a root domain.
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => undefined)
+    const scope = import.meta.env.BASE_URL || '/'
+    navigator.serviceWorker.register(`${scope}sw.js`, { scope }).catch(() => undefined)
   })
 }
 

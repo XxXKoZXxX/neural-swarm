@@ -5,15 +5,18 @@
  *    headers and must never be cached.
  *  - Network-first everywhere else: the app is always fresh when online, and
  *    still opens from the launcher when offline.
+ *  - Paths are resolved against the registration scope so the same build works
+ *    at a domain root (its own Vercel project) and under a subpath.
  */
 
 const CACHE = 'neural-swarm-shell-v1'
+const SHELL = new URL('index.html', self.registration.scope).href
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE)
-      .then((c) => c.addAll(['/', '/index.html', '/manifest.webmanifest', '/icons/icon.svg']))
+      .then((c) => c.addAll([SHELL, new URL('manifest.webmanifest', self.registration.scope).href]))
       .catch(() => undefined)
       .then(() => self.skipWaiting())
   )
@@ -34,7 +37,7 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url)
   if (url.origin !== self.location.origin) return // provider APIs stay untouched
-  if (url.pathname.startsWith('/@')) return // vite internals / HMR
+  if (url.pathname.includes('/@')) return // vite internals / HMR
 
   event.respondWith(
     (async () => {
@@ -50,7 +53,7 @@ self.addEventListener('fetch', (event) => {
         const hit = await caches.match(req)
         if (hit) return hit
         if (req.mode === 'navigate') {
-          const shell = await caches.match('/index.html')
+          const shell = await caches.match(SHELL)
           if (shell) return shell
         }
         throw err

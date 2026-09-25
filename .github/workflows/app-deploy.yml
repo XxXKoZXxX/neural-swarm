@@ -1,0 +1,128 @@
+name: Deploy app
+
+# Builds mobile/ and publishes it as its own Vercel project, separate from the
+# website project in deploy.yml. The site deploy is untouched by this workflow.
+#
+# First run creates the "neural-swarm-app" project inside the org identified by
+# VERCEL_ORG_ID and prints the permanent HTTPS URL the phone installs from.
+
+on:
+  push:
+    branches: [main, arena/01a0da12-neural-swarm]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/app-deploy.yml'
+  pull_request:
+    paths:
+      - 'mobile/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify app
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+
+      - run: npm ci
+
+      - name: Logic tests (adapters, error mapping, planner, diff)
+        run: npm test
+
+      - name: Integration tests (mounts the real app)
+        run: npm run test:ui
+
+      - name: Build
+        run: npm run build
+
+      - name: Check installability
+        run: |
+          node -e "
+          const fs = require('fs');
+          const m = JSON.parse(fs.readFileSync('dist/manifest.webmanifest', 'utf8'));
+          const sizes = m.icons.map(i => i.sizes);
+          const checks = [
+            ['name', !!m.name],
+            ['short_name', !!m.short_name],
+            ['start_url', !!m.start_url],
+            ['display standalone', m.display === 'standalone'],
+            ['192px icon', sizes.includes('192x192')],
+            ['512px icon', sizes.includes('512x512')],
+            ['maskable icon', m.icons.some(i => i.purpose === 'maskable')],
+            ['service worker', fs.existsSync('dist/sw.js')],
+          ];
+          let bad = 0;
+          for (const [label, pass] of checks) {
+            console.log((pass ? '  ok   ' : '  FAIL ') + label);
+            if (!pass) bad++;
+          }
+          if (bad) { console.error('\nApp is not installable.'); process.exit(1); }
+          console.log('\nApp is installable.');
+          "
+
+  deploy:
+    name: Publish app
+    needs: verify
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+
+      - run: npm ci
+
+      - name: Link the app project
+        run: npx --yes vercel@latest link --yes --project neural-swarm-app --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+
+      - name: Deploy to production
+        id: deploy
+        run: |
+          set -o pipefail
+          npx --yes vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN" 2>&1 | tee /tmp/deploy.log
+          url=$(grep -Eo 'https://[a-z0-9.-]+\.vercel\.app' /tmp/deploy.log | tail -1)
+          if [ -z "$url" ]; then
+            echo "::error::Deploy finished but no URL was found in the output."
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Neural Swarm app deployed"
+            echo ""
+            echo "**Install URL:** $url"
+            echo ""
+            echo "Open this on the phone in Chrome, then menu (top right) -> **Install app**."
+            echo "Override the project name any time with a different \`--project\` value."
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+
+      - name: Summary
+        run: echo "App published at ${{ steps.deploy.outputs.url }}"
