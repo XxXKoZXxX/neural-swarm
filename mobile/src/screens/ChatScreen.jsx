@@ -123,11 +123,11 @@ export default function ChatScreen({ settings, setSettings, toast, refreshModels
   }, [active?.system])
 
   const streamOne = useCallback(
-    async ({ chatId, baseMessages, targets, signal, userContent }) => {
+    async ({ chatId, baseMessages, targets, signal }) => {
       const results = []
 
       await Promise.all(
-        targets.map(async (t, idx) => {
+        targets.map(async (t) => {
           const target = targetOf(t.providerId, t.modelId)
           const assistantId = crypto.randomUUID()
           const placeholder = {
@@ -249,7 +249,7 @@ export default function ChatScreen({ settings, setSettings, toast, refreshModels
       abortRef.current = ctrl
 
       try {
-        await streamOne({ chatId: nextChat.id, baseMessages: history, targets, signal: ctrl.signal, userContent: text })
+        await streamOne({ chatId: nextChat.id, baseMessages: history, targets, signal: ctrl.signal })
       } catch (err) {
         if (err?.name !== 'AbortError') toast(err.message, 'error')
       } finally {
@@ -290,7 +290,6 @@ export default function ChatScreen({ settings, setSettings, toast, refreshModels
       baseMessages: history,
       targets: [{ providerId: settings.defaultProvider, modelId: settings.defaultModel }],
       signal: ctrl.signal,
-      userContent: lastUser.content,
     })
       .catch((err) => err?.name !== 'AbortError' && toast(err.message, 'error'))
       .finally(() => {

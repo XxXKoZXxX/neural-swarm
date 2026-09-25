@@ -8,7 +8,6 @@ export default function AgentCard({ name, out, error, running, tokens, ms, defau
   const [open, setOpen] = useState(defaultOpen)
   const [copied, setCopied] = useState(false)
   const def = AGENTS[name] || { icon: '◇', label: name, blurb: '' }
-  const status = error ? 'failed' : running ? 'running' : 'done'
 
   return (
     <div className={`agent${running ? ' running' : ''}`}>

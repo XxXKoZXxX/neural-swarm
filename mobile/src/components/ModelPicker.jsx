@@ -1,7 +1,7 @@
 // Model picker — every provider, every model, live-discovered lists included.
 
-import { useMemo, useState } from 'react'
-import { PROVIDERS, modelsFor, formatCost } from '../lib/catalog.js'
+import { useCallback, useMemo, useState } from 'react'
+import { PROVIDERS, modelsFor } from '../lib/catalog.js'
 import { Sheet, Chip, haptic } from './ui.jsx'
 
 function priceLabel(m) {
@@ -23,7 +23,10 @@ export default function ModelPicker({
   const [query, setQuery] = useState('')
   const [onlyReady, setOnlyReady] = useState(false)
 
-  const ready = (p) => p.requiresKey === false || Boolean(settings.keys?.[p.id])
+  const ready = useCallback(
+    (p) => p.requiresKey === false || Boolean(settings.keys?.[p.id]),
+    [settings.keys]
+  )
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -33,7 +36,7 @@ export default function ModelPicker({
       )
       return { provider: p, list, isReady: ready(p) }
     }).filter((g) => !onlyReady || g.isReady)
-  }, [query, settings, onlyReady])
+  }, [query, settings.discovered, onlyReady, ready])
 
   const readyCount = PROVIDERS.filter(ready).length
 

@@ -9,7 +9,8 @@
  *    at a domain root (its own Vercel project) and under a subpath.
  */
 
-const CACHE = 'neural-swarm-shell-v1'
+const CACHE = 'neural-swarm-app-shell-v1'
+const CACHE_PREFIX = 'neural-swarm-app-'
 const SHELL = new URL('index.html', self.registration.scope).href
 
 self.addEventListener('install', (event) => {
@@ -26,7 +27,10 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      // Only evict this app's own caches. The studio at / ships its own service
+      // worker with its own cache, and deleting that would break the site's
+      // offline shell — and vice versa.
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   )
 })

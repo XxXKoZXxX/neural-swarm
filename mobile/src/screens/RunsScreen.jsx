@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import AgentCard from '../components/AgentCard.jsx'
-import { Sheet, haptic, copyText, downloadFile } from '../components/ui.jsx'
+import { Sheet, copyText, downloadFile } from '../components/ui.jsx'
 import { AGENTS } from '../lib/agents.js'
 import { formatCost, formatTokens } from '../lib/catalog.js'
 import { renderMarkdown } from '../lib/markdown.js'

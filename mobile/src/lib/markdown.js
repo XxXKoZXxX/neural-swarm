@@ -42,7 +42,6 @@ export function renderMarkdown(src) {
   const fence = /```([^\n`]*)\n?([\s\S]*?)(?:```|$)/g
   let last = 0
   let match
-  let n = 0
 
   while ((match = fence.exec(text)) !== null) {
     if (match.index > last) blocks.push({ kind: 'text', body: text.slice(last, match.index) })

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { Sheet, haptic, copyText } from '../components/ui.jsx'
-import { PROVIDERS, providerById, modelsFor, formatCost } from '../lib/catalog.js'
+import { PROVIDERS, modelsFor } from '../lib/catalog.js'
 import { listModels } from '../lib/providers.js'
 import { store, listChats, listRuns, listVault, listFlows, loadDiscovered, saveDiscovered } from '../lib/store.js'
 

@@ -1,6 +1,6 @@
 // Flow — touch DAG builder. Drag nodes, tap ⇢ then a target to link, run it.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Sheet, haptic } from '../components/ui.jsx'
 import { AGENTS, AGENT_KEYS } from '../lib/agents.js'
 import { FLOW_PRESETS, topoSort } from '../lib/swarm.js'
@@ -20,7 +20,7 @@ function presetGraph(agents, width) {
   return { nodes, edges }
 }
 
-export default function FlowScreen({ settings, toast, prefill, clearPrefill, onOpenRun }) {
+export default function FlowScreen({ toast, prefill, clearPrefill, onOpenRun }) {
   const [nodes, setNodes] = useState([])
   const [edges, setEdges] = useState([])
   const [linkFrom, setLinkFrom] = useState(null)
