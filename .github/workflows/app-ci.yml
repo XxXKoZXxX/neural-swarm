@@ -1,0 +1,87 @@
+name: App CI
+
+# Tests the phone app and verifies the exact artifact Vercel publishes.
+#
+# Deployment itself is handled by the Vercel GitHub integration, which builds
+# this repo on every push using vercel.json -> scripts/build-all.mjs. Main
+# deploys to production, every other branch gets a preview URL.
+#
+# This workflow therefore gates rather than deploys:
+#   1. build precisely the way production builds (root dependencies only)
+#   2. assert the app under dist/app/ is installable and the site is intact
+#   3. run the test suites
+
+on:
+  push:
+    branches: [main, arena/01a0da12-neural-swarm]
+    paths:
+      - 'mobile/**'
+      - 'scripts/build-all.mjs'
+      - 'vercel.json'
+      - '.github/workflows/app-ci.yml'
+  pull_request:
+    paths:
+      - 'mobile/**'
+      - 'scripts/build-all.mjs'
+      - 'vercel.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: app-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and test the app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      # No mobile/node_modules here on purpose: this is exactly how Vercel
+      # builds, so the check below covers the real production path.
+      # APP_STRICT makes a missing app a hard failure in CI only.
+      - name: Build site and app (as production does)
+        run: |
+          set -o pipefail
+          APP_STRICT=1 node scripts/build-all.mjs 2>&1 | tee /tmp/build.log
+
+      - name: App must be present and installable
+        run: |
+          set -o pipefail
+          node scripts/check-app-installable.mjs 2>&1 | tee /tmp/appcheck.log
+
+      # Local base path sanity: the same source must also build for a domain root.
+      - name: App still builds for a root deployment
+        run: |
+          npm --prefix mobile run build
+          test -f mobile/dist/manifest.webmanifest
+          test -f mobile/dist/sw.js
+          echo "root-base build ok"
+
+      - name: Install mobile test dependencies
+        run: npm --prefix mobile ci
+
+      - name: Logic tests (adapters, error mapping, planner, diff)
+        run: npm --prefix mobile test
+
+      - name: Integration tests (mounts the real app in a DOM)
+        run: npm --prefix mobile run test:ui
+
+      - name: Upload the built app
+        uses: actions/upload-artifact@v4
+        with:
+          name: neural-swarm-app
+          path: dist/app
+          retention-days: 14

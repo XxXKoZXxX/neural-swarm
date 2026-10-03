@@ -42,14 +42,26 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === "navigate") {
+    // Only the studio's own shell may be written to the shell cache. The
+    // separate app under /app/ has its own service worker and its own HTML; a
+    // first visit there can still be handled here, and caching that response as
+    // "./index.html" would leave the studio's offline shell holding the app.
+    const shellPath = new URL(self.registration.scope).pathname;
+    const requested = new URL(request.url).pathname.replace(/index\.html$/, "");
+    const isShell = requested === shellPath;
+
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put("./index.html", copy)).catch(() => undefined);
+          if (isShell) {
+            const copy = response.clone();
+            caches.open(CACHE).then((cache) => cache.put("./index.html", copy)).catch(() => undefined);
+          }
           return response;
         })
-        .catch(() => caches.match("./index.html").then((cached) => cached || caches.match("./"))),
+        .catch(() =>
+          isShell ? caches.match("./index.html").then((cached) => cached || caches.match("./")) : Response.error(),
+        ),
     );
     return;
   }
